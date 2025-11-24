@@ -1,5 +1,6 @@
 import environ
-from .base import * # Import defaults from base.py
+
+from .base import *  # Import defaults from base.py
 
 # Initialize environment variables
 env = environ.Env()

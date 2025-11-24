@@ -1,6 +1,5 @@
-from pathlib import Path
-import os
 import sys
+from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # We go up 3 levels: config/settings/base.py -> config/settings -> config -> root
