@@ -1,0 +1,25 @@
+# Ruff settings (linter)
+[tool.ruff]
+target-version = "py312"   # Python 3.12
+line-length = 120
+exclude = ["**/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore "F403" (unable to detect undefined names from star imports)
+# and "F405" (name may be undefined, or defined from star imports)
+# specifically for settings files.
+"config/settings/*.py" = ["F403", "F405"]
+
+# Pytest settings
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--ds=config.settings.local --reuse-db"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["tests"]
+pythonpath = ["src"]
