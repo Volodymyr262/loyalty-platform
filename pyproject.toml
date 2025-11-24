@@ -1,0 +1,66 @@
+[tool.poetry]
+name = "loyalty-platform"
+version = "0.1.0"
+description = "Loyalty-as-a-Service (LaaS) API with Double-Entry Bookkeeping"
+authors = ["Volodymyr Hedz"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+# Core Framework
+django = "^5.0" #
+djangorestframework = "^3.14" #
+
+# Database & Async
+psycopg = {extras = ["binary"], version = "^3.1"} # PostgreSQL driver
+redis = "^5.0" # Cache & Queue
+celery = "^5.3" # Async tasks
+
+# API Documentation
+drf-spectacular = "^0.27" # OpenAPI 3.0 generation
+
+# Utilities
+django-environ = "^0.11" # Для роботи з .env файлами (12-factor app)
+uvicorn = {extras = ["standard"], version = "^0.27"} # ASGI сервер для Async Django
+gunicorn = "^21.2" # Production WSGI server for Cloud Run
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0" #
+pytest-django = "^4.8" #
+factory-boy = "^3.3" # Фікстури
+ruff = "^0.3" # Linter
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# --- Tool Configurations ---
+
+# Ruff settings
+[tool.ruff]
+# Target version corresponds to Python 3.12
+target-version = "py312"
+line-length = 120 # for Django long lines
+exclude = [
+    "**/migrations/*",
+]
+
+[tool.ruff.lint]
+# E: pycodestyle errors
+# W: pycodestyle warnings
+# F: pyflakes
+# I: isort (imports sorting)
+# B: flake8-bugbear
+select = ["E", "W", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"] # Ruff буде знати, що 'src' це локальний модуль
+
+# Налаштування Pytest
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--ds=config.settings.local --reuse-db"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["tests"]
+pythonpath = ["src"]

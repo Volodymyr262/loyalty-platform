@@ -1,0 +1,51 @@
+services:
+  # --- Database Service (PostgreSQL 16) ---
+  db:
+    image: postgres:16-alpine
+    # Data persistence: ensures data is not lost when container stops
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=loyalty_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    # Healthcheck to ensure DB is ready before the web service starts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Cache & Queue Broker (Redis) ---
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # --- Main Application (Django) ---
+  web:
+    build: .
+    # Mount current directory to /app for hot-reloading during development
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    # Wait for DB and Redis to be fully ready
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    # Environment variables for Django settings
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.local
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/loyalty_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=1
+    # Command to start the dev server exposed on 0.0.0.0
+    command: python manage.py runserver 0.0.0.0:8000
+
+volumes:
+  postgres_data:
