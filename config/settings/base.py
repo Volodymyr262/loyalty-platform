@@ -1,13 +1,8 @@
-import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # We go up 3 levels: config/settings/base.py -> config/settings -> config -> root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-# Add 'src' and 'src/apps' to python path so we can import apps easily
-sys.path.append(str(BASE_DIR / "src"))
-sys.path.append(str(BASE_DIR / "src" / "apps"))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -33,28 +28,29 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     # Local apps (LaaS modules)
-    "src.apps.core",
-    "src.apps.users",
-    "src.apps.finance",
-    "src.apps.loyalty",
+    "users",
+    "core",
+    "finance",
+    "loyalty",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",  # Required for Admin
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",  # Required for Admin
-    "django.contrib.messages.middleware.MessageMiddleware",  # Required for Admin
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # We will add our TenantContextMiddleware here later
+    # Custom LaaS Middleware (The Gatekeeper)
+    "core.middleware.TenantContextMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",  # Required for Admin
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -108,7 +104,6 @@ USE_I18N = True
 
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = "static/"
@@ -123,3 +118,5 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+AUTH_USER_MODEL = "users.User"

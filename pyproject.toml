@@ -8,7 +8,7 @@ exclude = ["**/migrations/*"]
 select = ["E", "W", "F", "I", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["src"]
+known-first-party = ["core", "users", "finance", "loyalty", "config"]
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore "F403" (unable to detect undefined names from star imports)
@@ -22,4 +22,19 @@ minversion = "6.0"
 addopts = "--ds=config.settings.local --reuse-db"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "manage.py",
+    "config/wsgi.py",
+    "config/asgi.py",
+    "*/apps.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
