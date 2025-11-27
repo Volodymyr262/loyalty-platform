@@ -4,8 +4,8 @@ Unit tests for the Organization model
 
 import pytest
 from django.db.utils import IntegrityError
+from users.models import Organization
 
-from src.apps.users.models import Organization
 from tests.factories.users import OrganizationFactory
 
 

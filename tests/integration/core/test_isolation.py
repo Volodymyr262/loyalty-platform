@@ -3,10 +3,10 @@ Integration tests for data isolation enforcement in the core module.
 """
 
 import pytest
+from core.context import reset_current_organization_id, set_current_organization_id
+from core.models import TenantAwareManager, TenantAwareModel
 from django.db import models
 
-from src.apps.core.context import reset_current_organization_id, set_current_organization_id
-from src.apps.core.models import TenantAwareManager, TenantAwareModel
 from tests.factories.users import OrganizationFactory
 
 

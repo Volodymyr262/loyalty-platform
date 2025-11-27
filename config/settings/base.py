@@ -33,10 +33,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     # Local apps (LaaS modules)
-    "src.apps.core",
-    "src.apps.users",
-    "src.apps.finance",
-    "src.apps.loyalty",
+    "core",
+    "users",
+    "finance",
+    "loyalty",
 ]
 
 MIDDLEWARE = [

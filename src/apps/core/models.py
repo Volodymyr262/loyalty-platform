@@ -2,10 +2,9 @@
 Abstract base models providing multi-tenancy capabilities.
 """
 
+from core.context import get_current_organization_id
+from core.managers import TenantAwareManager
 from django.db import models
-
-from src.apps.core.context import get_current_organization_id
-from src.apps.core.managers import TenantAwareManager
 
 
 class TenantAwareModel(models.Model):
