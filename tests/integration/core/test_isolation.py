@@ -69,3 +69,33 @@ def test_manager_enforces_tenant_isolation(concrete_tenant_model):
 
     # Cleanup context
     reset_current_organization_id()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_manager_returns_all_records_when_no_tenant_is_active(concrete_tenant_model):
+    """
+    Scenario: System access (e.g. Admin panel or Background task).
+    Context: No organization is set.
+    Expected: Manager should return ALL records from ALL tenants.
+    """
+    SimpleDocument = concrete_tenant_model
+
+    # Arrange: Create data for different organizations
+    org_a = OrganizationFactory()
+    org_b = OrganizationFactory()
+
+    # Create documents
+    set_current_organization_id(org_a.id)
+    SimpleDocument.objects.create(name="Doc A")
+
+    set_current_organization_id(org_b.id)
+    SimpleDocument.objects.create(name="Doc B")
+
+    # Act: Reset context (simulate Admin/System user)
+    reset_current_organization_id()
+
+    # Query without context
+    queryset = SimpleDocument.objects.all()
+
+    # Assert: We should see everything
+    assert queryset.count() == 2

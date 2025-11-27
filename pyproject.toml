@@ -23,3 +23,18 @@ addopts = "--ds=config.settings.local --reuse-db"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "manage.py",
+    "config/wsgi.py",
+    "config/asgi.py",
+    "*/apps.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
