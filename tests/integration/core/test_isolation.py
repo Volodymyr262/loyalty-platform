@@ -3,37 +3,49 @@ Integration tests for data isolation enforcement in the core module.
 """
 
 import pytest
+from django.db import connection, models
+
 from core.context import reset_current_organization_id, set_current_organization_id
 from core.models import TenantAwareManager, TenantAwareModel
-from django.db import models
-
 from tests.factories.users import OrganizationFactory
 
 
-# Define a concrete model strictly for testing purposes
-# This allows us to test the abstract TenantAwareModel logic in isolation
-class SimpleDocument(TenantAwareModel):
+@pytest.fixture
+def concrete_tenant_model():
     """
-    A minimal model used to verify tenant isolation logic.
+    Creates a temporary concrete model based on the abstract TenantAwareModel
+    and creates a physical table in the database for it using SchemaEditor.
     """
 
-    name = models.CharField(max_length=255)
+    # 1. Define the model class dynamically
+    class SimpleDocument(TenantAwareModel):
+        name = models.CharField(max_length=255)
+        objects = TenantAwareManager()
 
-    # We explicitly attach the manager to verify it filters data correctly
-    objects = TenantAwareManager()
+        class Meta:
+            app_label = "core"
 
-    class Meta:
-        # app_label is required when defining models outside of standard apps
-        app_label = "core"
+    # 2. Manually create the table in the DB
+    with connection.schema_editor() as schema_editor:
+        schema_editor.create_model(SimpleDocument)
+
+    yield SimpleDocument
+
+    # 3. Cleanup: Drop the table after test finishes
+    with connection.schema_editor() as schema_editor:
+        schema_editor.delete_model(SimpleDocument)
 
 
-@pytest.mark.django_db
-def test_manager_enforces_tenant_isolation():
+@pytest.mark.django_db(transaction=True)
+def test_manager_enforces_tenant_isolation(concrete_tenant_model):
     """
     Verifies that TenantAwareManager automatically filters records
     based on the active organization context.
     """
-    # Arrange: Create two distinct organizations using the imported Factory class
+    # Using the dynamic model from fixture
+    SimpleDocument = concrete_tenant_model
+
+    # Arrange: Create two distinct organizations
     org_a = OrganizationFactory()
     org_b = OrganizationFactory()
 

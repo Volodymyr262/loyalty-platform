@@ -2,8 +2,9 @@
 Custom Django managers for core functionality (multi-tenancy).
 """
 
-from core.context import get_current_organization_id
 from django.db import models
+
+from core.context import get_current_organization_id
 
 
 class TenantAwareManager(models.Manager):

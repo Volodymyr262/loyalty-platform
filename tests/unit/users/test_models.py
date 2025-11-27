@@ -4,9 +4,9 @@ Unit tests for the Organization model
 
 import pytest
 from django.db.utils import IntegrityError
-from users.models import Organization
 
 from tests.factories.users import OrganizationFactory
+from users.models import Organization
 
 
 def test_create_organization():

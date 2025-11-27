@@ -4,6 +4,7 @@ Factories for the users application (tenants and users)
 
 import factory
 from factory.django import DjangoModelFactory
+
 from users.models import Organization
 
 

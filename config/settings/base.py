@@ -1,13 +1,8 @@
-import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # We go up 3 levels: config/settings/base.py -> config/settings -> config -> root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-# Add 'src' and 'src/apps' to python path so we can import apps easily
-sys.path.append(str(BASE_DIR / "src"))
-sys.path.append(str(BASE_DIR / "src" / "apps"))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -33,8 +28,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     # Local apps (LaaS modules)
-    "core",
     "users",
+    "core",
     "finance",
     "loyalty",
 ]
