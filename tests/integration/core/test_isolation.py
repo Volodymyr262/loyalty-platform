@@ -3,6 +3,7 @@ Integration tests for data isolation enforcement in the core module.
 """
 
 import pytest
+from django.apps import apps
 from django.db import connection, models
 
 from core.context import reset_current_organization_id, set_current_organization_id
@@ -13,11 +14,10 @@ from tests.factories.users import OrganizationFactory
 @pytest.fixture
 def concrete_tenant_model():
     """
-    Creates a temporary concrete model based on the abstract TenantAwareModel
-    and creates a physical table in the database for it using SchemaEditor.
+    Creates a temporary concrete model based on the abstract TenantAwareModel.
     """
 
-    # 1. Define the model class dynamically
+    # Define the model class dynamically
     class SimpleDocument(TenantAwareModel):
         name = models.CharField(max_length=255)
         objects = TenantAwareManager()
@@ -25,15 +25,22 @@ def concrete_tenant_model():
         class Meta:
             app_label = "core"
 
-    # 2. Manually create the table in the DB
+    # Manually create the table
     with connection.schema_editor() as schema_editor:
         schema_editor.create_model(SimpleDocument)
 
     yield SimpleDocument
 
-    # 3. Cleanup: Drop the table after test finishes
+    # Cleanup: Drop the table
     with connection.schema_editor() as schema_editor:
         schema_editor.delete_model(SimpleDocument)
+
+    # This prevents "RuntimeWarning: Model was already registered" on the next test run
+    try:
+        del apps.all_models["core"]["simpledocument"]
+        apps.clear_cache()
+    except KeyError:
+        pass
 
 
 @pytest.mark.django_db(transaction=True)
