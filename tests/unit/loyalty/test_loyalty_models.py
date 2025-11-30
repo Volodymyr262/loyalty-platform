@@ -2,6 +2,9 @@
 Unit tests for Loyalty models (Campaign, Reward).
 """
 
+import pytest
+from django.core.exceptions import ValidationError
+
 from core.context import set_current_organization_id
 from core.models import TenantAwareModel
 from loyalty.models import Campaign, Reward
@@ -38,12 +41,15 @@ class TestCampaignModel:
 
     def test_campaign_points_cannot_be_negative(self):
         """
-        Verify that we cannot create a campaign with negative points.
+        Verify that validation fails if points_value is negative.
         """
         org = OrganizationFactory()
         set_current_organization_id(org.id)
 
-        pass
+        campaign = Campaign(name="Bad Campaign", points_value=-100, organization=org)
+
+        with pytest.raises(ValidationError):
+            campaign.full_clean()
 
     class TestRewardModel:
         """
