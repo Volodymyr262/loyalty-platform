@@ -18,8 +18,7 @@ class TenantAwareModel(models.Model):
     """
 
     # Link to the Organization (Tenant).
-    # We use a string reference 'users.Organization' to avoid circular imports.
-    # db_index=True is critical for performance as this column is used in almost every WHERE clause.
+    # db_index=True is critical for performance as this column is used in almost everyWHERE clause.
     organization = models.ForeignKey(
         "users.Organization",
         on_delete=models.CASCADE,
