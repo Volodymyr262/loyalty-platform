@@ -35,3 +35,61 @@ class Reward(TenantAwareModel):
 
     def __str__(self):
         return self.name
+
+
+class Customer(TenantAwareModel):
+    """
+    Represents a client of a specific Tenant.
+    NOT a system user.
+    """
+
+    # External ID from the client's system
+    external_id = models.CharField(max_length=255, blank=True)
+
+    # Date when the customer joined the loyalty program
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Ensure external_id is unique within a specific organization.
+        # Two different tenants can have a customer with ID "123", but one tenant cannot have duplicates.
+        unique_together = [("organization", "external_id")]
+
+    def __str__(self):
+        return f"{self.external_id} ({self.organization.name})"
+
+
+class Transaction(TenantAwareModel):
+    """
+    The Ledger (Journal).
+    Records every point change (+ or -).
+    The customer's balance is calculated as the sum of all their transactions.
+    """
+
+    EARN = "earn"
+    SPEND = "spend"
+
+    TRANSACTION_TYPES = [
+        (EARN, "Earn Points"),
+        (SPEND, "Spend Points"),
+    ]
+
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="transactions",  # Allows accessing transactions via customer.transactions.all()
+    )
+
+    # Point amount.
+    # Positive (+) = Earn
+    # Negative (-) = Spend
+    amount = models.IntegerField()
+
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+
+    description = models.TextField(blank=True)
+
+    # Timestamp of the transaction
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.customer} - {self.amount} ({self.get_transaction_type_display()})"
