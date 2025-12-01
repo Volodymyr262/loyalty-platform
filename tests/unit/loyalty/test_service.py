@@ -11,7 +11,6 @@ from tests.factories.loyalty import CustomerFactory
 from tests.factories.users import OrganizationFactory
 
 
-@pytest.mark.django_db
 class TestLoyaltyService:
     """
     Tests for business logic regarding points processing.
