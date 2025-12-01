@@ -44,7 +44,7 @@ class LoyaltyService:
 
         # Execution Logic
         # We rely on TenantAwareModel to automatically set the organization based on context
-        # or we inherit it from the customer to be safe (customer.organization).
+        # Or we inherit it from the customer to be safe (customer.organization).
         # Since Transaction is TenantAwareModel, it usually needs the global context set,
         # but inheriting from customer is safer to avoid cross-tenant data leaks.
 
