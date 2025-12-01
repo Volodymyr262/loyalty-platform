@@ -4,6 +4,7 @@ Models for the Loyalty application..
 
 from django.db import models
 from django.db.models import Sum
+
 from core.models import TenantAwareModel
 
 
@@ -63,7 +64,7 @@ class Customer(TenantAwareModel):
         Returns 0 if no transactions exist.
         """
         # 'transactions' is the related_name we defined in the Transaction model
-        result = self.transactions.aggregate(total=Sum('amount'))['total']
+        result = self.transactions.aggregate(total=Sum("amount"))["total"]
 
         # If there are no transactions, Sum returns None. We must return 0 instead.
         return result or 0

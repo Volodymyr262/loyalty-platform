@@ -83,15 +83,9 @@ class TestCustomerModel:
         assert customer.get_balance() == 0
 
         # 3. Add transactions (+100, -30, +10)
-        Transaction.objects.create(
-            customer=customer, amount=100, transaction_type='earn', organization=org
-        )
-        Transaction.objects.create(
-            customer=customer, amount=-30, transaction_type='spend', organization=org
-        )
-        Transaction.objects.create(
-            customer=customer, amount=10, transaction_type='earn', organization=org
-        )
+        Transaction.objects.create(customer=customer, amount=100, transaction_type="earn", organization=org)
+        Transaction.objects.create(customer=customer, amount=-30, transaction_type="spend", organization=org)
+        Transaction.objects.create(customer=customer, amount=10, transaction_type="earn", organization=org)
 
         # Verify calculated balance (100 - 30 + 10 = 80)
         assert customer.get_balance() == 80
