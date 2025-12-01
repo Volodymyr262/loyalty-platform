@@ -3,7 +3,7 @@ Models for the Loyalty application..
 """
 
 from django.db import models
-
+from django.db.models import Sum
 from core.models import TenantAwareModel
 
 
@@ -57,6 +57,17 @@ class Customer(TenantAwareModel):
     def __str__(self):
         return f"{self.external_id} ({self.organization.name})"
 
+    def get_balance(self):
+        """
+        Calculates the current balance by summing up all related transactions.
+        Returns 0 if no transactions exist.
+        """
+        # 'transactions' is the related_name we defined in the Transaction model
+        result = self.transactions.aggregate(total=Sum('amount'))['total']
+
+        # If there are no transactions, Sum returns None. We must return 0 instead.
+        return result or 0
+
 
 class Transaction(TenantAwareModel):
     """
@@ -83,12 +94,8 @@ class Transaction(TenantAwareModel):
     # Positive (+) = Earn
     # Negative (-) = Spend
     amount = models.IntegerField()
-
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
-
     description = models.TextField(blank=True)
-
-    # Timestamp of the transaction
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

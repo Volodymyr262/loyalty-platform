@@ -66,3 +66,32 @@ class TestCustomerModel:
 
         assert customer_b.pk is not None
         assert customer_b.organization == org_b
+
+    def test_get_balance_calculates_sum_of_transactions(self):
+        """
+        Verify that get_balance() returns the correct sum of all transactions.
+        """
+        from loyalty.models import Transaction
+
+        org = OrganizationFactory()
+        set_current_organization_id(org.id)
+
+        # Create a customer
+        customer = Customer.objects.create(external_id="balance_test_user")
+
+        #  Check initial balance (should be 0)
+        assert customer.get_balance() == 0
+
+        # 3. Add transactions (+100, -30, +10)
+        Transaction.objects.create(
+            customer=customer, amount=100, transaction_type='earn', organization=org
+        )
+        Transaction.objects.create(
+            customer=customer, amount=-30, transaction_type='spend', organization=org
+        )
+        Transaction.objects.create(
+            customer=customer, amount=10, transaction_type='earn', organization=org
+        )
+
+        # Verify calculated balance (100 - 30 + 10 = 80)
+        assert customer.get_balance() == 80
