@@ -10,10 +10,16 @@ from django.db import models
 
 class User(AbstractUser):
     """
-    Custom User model
+    Custom User model.
+    Linked to an Organization to know which Tenant data to access.
     """
 
-    pass
+    organization = models.ForeignKey(
+        "users.Organization", on_delete=models.SET_NULL, null=True, blank=True, related_name="users"
+    )
+
+    def __str__(self):
+        return f"{self.username} ({self.organization.name if self.organization else 'No Org'})"
 
 
 class Organization(models.Model):
