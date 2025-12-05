@@ -46,7 +46,7 @@ class Customer(TenantAwareModel):
 
     # External ID from the client's system
     external_id = models.CharField(max_length=255, blank=True)
-
+    email = models.EmailField(blank=True, null=True)
     # Date when the customer joined the loyalty program
     joined_at = models.DateTimeField(auto_now_add=True)
 
