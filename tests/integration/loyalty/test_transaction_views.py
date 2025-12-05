@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from core.context import set_current_organization_id
 from loyalty.models import Customer, Transaction
+from tests.factories.loyalty import CampaignFactory
 from tests.factories.users import UserFactory
 
 
@@ -103,4 +104,24 @@ class TestTransactionAPI:
         assert response.status_code == status.HTTP_200_OK
 
         assert len(response.data) == 1
-        assert response.data[0]["amount"] == 100
+        assert response.data[0]["points"] == 100
+
+    def test_accrue_points_applies_campaign_rules(self):
+        """
+        POST /transactions/
+        Scenario: There is an active Campaign with x2 multiplier.
+        Input Amount (Money): 100
+        Expected Amount (Points): 200
+        """
+
+        CampaignFactory(organization=self.org, name="Double Points", points_value=2, is_active=True)
+
+        payload = {"external_id": "SHOP_USER_777", "amount": 100.00, "description": "Black Friday Purchase"}
+
+        response = self.client.post("/api/loyalty/transactions/", data=payload, **self.headers)
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+        transaction = Transaction.objects.get(id=response.data["id"])
+
+        assert transaction.amount == 200

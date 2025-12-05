@@ -3,10 +3,12 @@ Service layer for Loyalty business logic.
 Handles point calculations, validations, and transaction processing.
 """
 
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from loyalty.models import Transaction
+from loyalty.models import Campaign, Transaction
 
 
 class LoyaltyService:
@@ -57,3 +59,20 @@ class LoyaltyService:
         )
 
         return new_transaction
+
+
+def calculate_points(amount, organization):
+    """
+    Calculates how many points should be accrued.
+    Strategy: BEST OFFER WINS.
+    We take the highest multiplier from all active campaigns.
+    """
+    campaigns = Campaign.objects.filter(organization=organization, is_active=True)
+
+    multipliers = [c.points_value for c in campaigns]
+
+    max_multiplier = max(multipliers) if multipliers else 1.0
+
+    points = int(amount * Decimal(max_multiplier))
+
+    return points
