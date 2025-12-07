@@ -3,10 +3,12 @@ Service layer for Loyalty business logic.
 Handles point calculations, validations, and transaction processing.
 """
 
+from datetime import datetime
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from loyalty.models import Campaign, Transaction
 
@@ -61,18 +63,61 @@ class LoyaltyService:
         return new_transaction
 
 
-def calculate_points(amount, organization):
+def calculate_points(amount, customer):
     """
-    Calculates how many points should be accrued.
-    Strategy: BEST OFFER WINS.
-    We take the highest multiplier from all active campaigns.
+    Calculates points based on Amount + Active Campaigns (Rules & Types).
+    Now accepts 'customer' instead of 'organization' to check history.
     """
+    amount_decimal = Decimal(amount)
+    base_points = int(amount_decimal)
+    best_points = base_points
+
+    organization = customer.organization
+
+    now = timezone.localtime(timezone.now())
+    current_time = now.time()
+
     campaigns = Campaign.objects.filter(organization=organization, is_active=True)
 
-    multipliers = [c.points_value for c in campaigns]
+    for campaign in campaigns:
+        rules = campaign.rules or {}
+        is_applicable = True
 
-    max_multiplier = max(multipliers) if multipliers else 1.0
+        # RULE 1: Min Amount
+        if "min_amount" in rules:
+            min_amount = Decimal(str(rules["min_amount"]))
+            if amount_decimal < min_amount:
+                is_applicable = False
 
-    points = int(amount * Decimal(max_multiplier))
+        # RULE 2: Welcome Bonus (First Purchase)
+        if "is_first_purchase" in rules and rules["is_first_purchase"] is True:
+            if customer.transactions.exists():
+                is_applicable = False
 
-    return points
+        # RULE 3: Happy Hours (Time Window)
+        if "start_time" in rules and "end_time" in rules:
+            try:
+                start = datetime.strptime(rules["start_time"], "%H:%M").time()
+                end = datetime.strptime(rules["end_time"], "%H:%M").time()
+
+                if not (start <= current_time <= end):
+                    is_applicable = False
+            except ValueError:
+                pass
+
+        if not is_applicable:
+            continue
+
+        # Calculation
+        calculated_points = base_points
+
+        if campaign.reward_type == Campaign.TYPE_MULTIPLIER:
+            calculated_points = int(amount_decimal * Decimal(campaign.points_value))
+
+        elif campaign.reward_type == Campaign.TYPE_BONUS:
+            calculated_points = base_points + campaign.points_value
+
+        if calculated_points > best_points:
+            best_points = calculated_points
+
+    return best_points

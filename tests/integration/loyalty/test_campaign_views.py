@@ -57,7 +57,7 @@ class TestCampaignAPI:
         payload = {
             "name": "Summer Sale",
             "description": "Double points for cold drinks",
-            "points_value": 2.0,
+            "points_value": 2,  # Integer, бо ми змінили модель на PositiveIntegerField
             "is_active": True,
         }
 
@@ -102,14 +102,11 @@ class TestCampaignAPI:
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-        from loyalty.models import Campaign
-
         assert Campaign.objects.filter(id=campaign.id).exists() is False
 
     def test_cannot_delete_other_tenant_campaign(self):
         """
         Attempting to delete another tenant's campaign should return 404 Not Found.
-        (Because QuerySet filtering happens before permission checks).
         """
         other_campaign = CampaignFactory(name="Stolen Campaign")
 
@@ -119,6 +116,32 @@ class TestCampaignAPI:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-        from loyalty.models import Campaign
-
         assert Campaign.objects.filter(id=other_campaign.id).exists() is True
+
+    def test_create_campaign_with_rules(self):
+        """
+        POST /api/loyalty/campaigns/
+        Should create a campaign with specific Rules and Reward Type.
+        """
+        payload = {
+            "name": "Big Spender Bonus",
+            "description": "Get +500 points for orders over 1000",
+            "points_value": 500,
+            "reward_type": "bonus",
+            "rules": {"min_amount": 1000},
+            "is_active": True,
+        }
+
+        url = "/api/loyalty/campaigns/"
+
+        response = self.client.post(url, data=payload, format="json", **self.headers)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["reward_type"] == "bonus"
+        assert response.data["rules"] == {"min_amount": 1000}
+
+        created_campaign = Campaign.objects.get(id=response.data["id"])
+
+        assert created_campaign.reward_type == "bonus"
+        assert created_campaign.rules["min_amount"] == 1000
+        assert created_campaign.organization == self.org

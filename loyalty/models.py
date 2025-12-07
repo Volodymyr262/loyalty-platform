@@ -10,17 +10,31 @@ from core.models import TenantAwareModel
 
 class Campaign(TenantAwareModel):
     """
-    Represents a loyalty campaign defining how users earn points.
-    e.g., "Welcome Bonus", "Purchase Reward".
+    Represents a loyalty campaign with flexible rules.
     """
+
+    TYPE_MULTIPLIER = "multiplier"
+    TYPE_BONUS = "bonus"
+
+    REWARD_TYPES = [
+        (TYPE_MULTIPLIER, "Multiplier (e.g. x2)"),
+        (TYPE_BONUS, "Fixed Bonus (e.g. +100 points)"),
+    ]
 
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     points_value = models.PositiveIntegerField()
+
+    reward_type = models.CharField(max_length=20, choices=REWARD_TYPES, default=TYPE_MULTIPLIER)
+
+    # JSON field for rules.
+    # EXAMPLE: {"min_amount": 1000, "start_time": "14:00"}
+    rules = models.JSONField(default=dict, blank=True)
+
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.get_reward_type_display()})"
 
 
 class Reward(TenantAwareModel):

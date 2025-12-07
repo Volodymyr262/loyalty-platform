@@ -15,7 +15,7 @@ class CampaignSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Campaign
-        fields = ["id", "name", "description", "points_value", "is_active"]
+        fields = ["id", "name", "description", "points_value", "reward_type", "rules", "is_active"]
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -48,7 +48,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             organization=organization, external_id=external_id, defaults={"email": email}
         )
 
-        points_to_accrue = calculate_points(money_amount, organization)
+        points_to_accrue = calculate_points(money_amount, customer)
 
         transaction = Transaction.objects.create(
             customer=customer,

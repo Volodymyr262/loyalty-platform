@@ -14,7 +14,9 @@ class TestCampaignSerializer:
     """
 
     def test_campaign_serializer_contains_expected_fields(self):
-        campaign = CampaignFactory(name="Test Campaign", points_value=100)
+        campaign = CampaignFactory(
+            name="Test Campaign", points_value=100, reward_type="bonus", rules={"min_amount": 1000}
+        )
 
         serializer = CampaignSerializer(campaign)
         data = serializer.data
@@ -22,6 +24,8 @@ class TestCampaignSerializer:
         assert data["id"] == campaign.id
         assert data["name"] == campaign.name
         assert data["points_value"] == 100
+        assert data["reward_type"] == "bonus"
+        assert data["rules"] == {"min_amount": 1000}
 
         assert "organization" not in data
 
