@@ -35,24 +35,17 @@ class CampaignFactory(DjangoModelFactory):
     is_active = True
     organization = factory.SubFactory(OrganizationFactory)
 
+    # TRAITS: This is a powerful FactoryBoy feature.
+    # It allows to create specific "types" of campaigns easily in tests.
     # Usage: CampaignFactory(spending_rule=True)
 
     class Params:
         spending_rule = factory.Trait(
-            rules={
-                "min_amount": 1000,
-                "multiplier": 2.0
-            },
-            description="Campaign with minimum spend rule"
+            rules={"min_amount": 1000, "multiplier": 2.0}, description="Campaign with minimum spend rule"
         )
 
-    class Params:
         time_based = factory.Trait(
-            rules={
-                "start_time": "09:00",
-                "end_time": "18:00"
-            },
-            description="Happy hours campaign"
+            rules={"start_time": "09:00", "end_time": "18:00"}, description="Happy hours campaign"
         )
 
 

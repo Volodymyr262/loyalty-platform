@@ -119,7 +119,7 @@ class TestTransactionAPI:
             name="Double Points",
             points_value=2,
             reward_type="multiplier",  # <-- Added this line
-            is_active=True
+            is_active=True,
         )
 
         payload = {"external_id": "SHOP_USER_777", "amount": 100.00, "description": "Black Friday Purchase"}
