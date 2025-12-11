@@ -113,8 +113,14 @@ class TestTransactionAPI:
         Input Amount (Money): 100
         Expected Amount (Points): 200
         """
-
-        CampaignFactory(organization=self.org, name="Double Points", points_value=2, is_active=True)
+        # FIX: Explicitly set reward_type="multiplier" to avoid random "bonus" generation from Factory
+        CampaignFactory(
+            organization=self.org,
+            name="Double Points",
+            points_value=2,
+            reward_type="multiplier",  # <-- Added this line
+            is_active=True
+        )
 
         payload = {"external_id": "SHOP_USER_777", "amount": 100.00, "description": "Black Friday Purchase"}
 
