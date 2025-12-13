@@ -4,7 +4,7 @@ Serializers for the Loyalty application.
 
 from rest_framework import serializers
 
-from loyalty.models import Campaign, Customer, Transaction
+from loyalty.models import Campaign, Customer, Reward, Transaction
 from loyalty.services import calculate_points
 
 
@@ -58,3 +58,10 @@ class TransactionSerializer(serializers.ModelSerializer):
         )
 
         return transaction
+
+
+class RewardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reward
+        fields = ["id", "name", "description", "point_cost", "is_active"]
+        read_only_fields = ["id"]

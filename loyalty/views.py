@@ -5,8 +5,8 @@ API Views for the Loyalty application.
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
-from loyalty.models import Campaign, Transaction
-from loyalty.serializers import CampaignSerializer, TransactionSerializer
+from loyalty.models import Campaign, Reward, Transaction
+from loyalty.serializers import CampaignSerializer, RewardSerializer, TransactionSerializer
 
 
 class CampaignViewSet(viewsets.ModelViewSet):
@@ -41,3 +41,18 @@ class TransactionViewSet(viewsets.ModelViewSet):
         Return transactions only for the current tenant.
         """
         return Transaction.objects.all()
+
+
+class RewardViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for managing Rewards (the catalog).
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = RewardSerializer
+
+    def get_queryset(self):
+        """
+        Return rewards for the CURRENT tenant only.
+        """
+        return Reward.objects.all()

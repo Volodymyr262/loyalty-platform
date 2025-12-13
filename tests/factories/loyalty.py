@@ -57,3 +57,20 @@ class CustomerFactory(DjangoModelFactory):
     external_id = factory.Sequence(lambda n: f"client_{n}")
 
     organization = factory.SubFactory(OrganizationFactory)
+
+
+class RewardFactory(DjangoModelFactory):
+    """
+    Factory for creating Reward instances.
+    """
+
+    class Meta:
+        model = "loyalty.Reward"
+
+    name = factory.Faker("catch_phrase")
+
+    description = factory.Faker("sentence")
+    point_cost = factory.Faker("random_int", min=50, max=1000)
+    is_active = True
+
+    organization = factory.SubFactory(OrganizationFactory)
