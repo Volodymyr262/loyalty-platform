@@ -66,7 +66,6 @@ class LoyaltyService:
 def calculate_points(amount, customer):
     """
     Calculates points based on Amount + Active Campaigns (Rules & Types).
-    Now accepts 'customer' instead of 'organization' to check history.
     """
     amount_decimal = Decimal(amount)
     base_points = int(amount_decimal)

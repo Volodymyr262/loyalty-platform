@@ -2,11 +2,17 @@
 API Views for the Loyalty application.
 """
 
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from loyalty.models import Campaign, Reward, Transaction
-from loyalty.serializers import CampaignSerializer, RewardSerializer, TransactionSerializer
+from loyalty.serializers import (
+    AccrualSerializer,
+    CampaignSerializer,
+    RedemptionSerializer,
+    RewardSerializer,
+    TransactionReadSerializer,
+)
 
 
 class CampaignViewSet(viewsets.ModelViewSet):
@@ -28,19 +34,37 @@ class CampaignViewSet(viewsets.ModelViewSet):
         return Campaign.objects.all()
 
 
-class TransactionViewSet(viewsets.ModelViewSet):
+class TransactionHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    API endpoint for processing Transactions (Accrual/Redemption).
+    GET /api/loyalty/transactions/
+    Endpoint for transaction history.
     """
 
     permission_classes = [IsAuthenticated]
-    serializer_class = TransactionSerializer
+    serializer_class = TransactionReadSerializer
 
     def get_queryset(self):
-        """
-        Return transactions only for the current tenant.
-        """
-        return Transaction.objects.all()
+        return Transaction.objects.all().order_by("-created_at")
+
+
+class AccrualViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    """
+    POST /api/loyalty/accruals/
+    Endpoint for accrue (Earn).
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = AccrualSerializer
+
+
+class RedemptionViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    """
+    POST /api/loyalty/redemption/
+    Endpoint for redemption (Spend).
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = RedemptionSerializer
 
 
 class RewardViewSet(viewsets.ModelViewSet):

@@ -3,7 +3,7 @@ Unit tests for Loyalty Serializers.
 """
 
 from loyalty.models import Customer, Transaction
-from loyalty.serializers import CampaignSerializer, TransactionSerializer
+from loyalty.serializers import AccrualSerializer, CampaignSerializer, TransactionReadSerializer
 from tests.factories.loyalty import CampaignFactory
 from tests.factories.users import UserFactory
 
@@ -30,49 +30,63 @@ class TestCampaignSerializer:
         assert "organization" not in data
 
 
-class TestTransactionSerializer:
+class TestTransactionSerializers:
     """
-    Test TransactionSerializer specific logic.
+    Tests for the split serializers: TransactionReadSerializer and AccrualSerializer.
     """
 
-    def test_serialization_output_format(self):
+    def test_read_serializer_output_format(self):
         """
-        Ensure that when reading a transaction, we see 'points' but NOT 'amount'.
+        Test TransactionReadSerializer (GET).
+        It should return 'amount', 'transaction_type', etc.
         """
         user = UserFactory()
         org = user.organization
-
         customer = Customer.objects.create(external_id="123", organization=org)
 
         transaction = Transaction.objects.create(
             customer=customer, organization=org, amount=500, transaction_type=Transaction.EARN, description="Test"
         )
 
-        serializer = TransactionSerializer(transaction)
+        serializer = TransactionReadSerializer(transaction)
         data = serializer.data
 
         assert "id" in data
         assert "points" in data
         assert data["points"] == 500
+        assert "transaction_type" in data
 
-        assert "amount" not in data
-        assert "external_id" not in data
-
-    def test_validation_required_fields(self):
+    def test_accrual_validation_required_fields(self):
         """
-        Ensure serializer fails if required fields are missing.
+        Test AccrualSerializer (POST).
+        Ensure it fails if required fields (amount, external_id) are missing.
         """
         data = {"description": "Just description"}
-        serializer = TransactionSerializer(data=data)
+
+        serializer = AccrualSerializer(data=data)
 
         assert serializer.is_valid() is False
         assert "amount" in serializer.errors
         assert "external_id" in serializer.errors
 
-    def test_amount_validation_format(self):
+    def test_accrual_amount_validation_format(self):
         """
-        Ensure 'amount' accepts decimal/float strings.
+        Test AccrualSerializer (POST).
+        Ensure 'amount' accepts decimal strings.
         """
         data = {"external_id": "USER_1", "amount": "100.50"}
-        serializer = TransactionSerializer(data=data)
+        serializer = AccrualSerializer(data=data)
+
         assert serializer.is_valid() is True
+
+    def test_accrual_negative_amount_validation(self):
+        """
+        Test AccrualSerializer (POST).
+        Ensure negative amounts are rejected (Validation we added specifically for Accruals).
+        """
+        data = {"external_id": "USER_1", "amount": "-100.00"}
+        serializer = AccrualSerializer(data=data)
+
+        assert serializer.is_valid() is False
+        assert "amount" in serializer.errors
+        assert "must be positive" in str(serializer.errors["amount"])
