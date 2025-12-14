@@ -4,7 +4,14 @@ URL routing for the loyalty application API.
 
 from rest_framework.routers import DefaultRouter
 
-from loyalty.views import AccrualViewSet, CampaignViewSet, RedemptionViewSet, RewardViewSet, TransactionHistoryViewSet
+from loyalty.views import (
+    AccrualViewSet,
+    CampaignViewSet,
+    CustomerViewSet,
+    RedemptionViewSet,
+    RewardViewSet,
+    TransactionHistoryViewSet,
+)
 
 router = DefaultRouter()
 router.register(r"campaigns", CampaignViewSet, basename="campaigns")
@@ -12,4 +19,5 @@ router.register(r"transactions", TransactionHistoryViewSet, basename="transactio
 router.register(r"accruals", AccrualViewSet, basename="accruals")  # Write Only (Earn)
 router.register(r"redemption", RedemptionViewSet, basename="redemption")
 router.register(r"rewards", RewardViewSet, basename="rewards")
+router.register(r"customers", CustomerViewSet, basename="customers")
 urlpatterns = router.urls

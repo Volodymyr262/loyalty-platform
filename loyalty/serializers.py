@@ -127,3 +127,17 @@ class RedemptionSerializer(serializers.Serializer):
 
         except DjangoValidationError as e:
             raise serializers.ValidationError({"detail": e.messages if hasattr(e, "messages") else str(e)}) from e
+
+
+class CustomerSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Customer model.
+    Read-only view of customer data including calculated balance.
+    """
+
+    # Fetch the balance dynamically using the 'get_balance' method on the model
+    balance = serializers.DecimalField(source="get_balance", read_only=True, max_digits=10, decimal_places=2)
+
+    class Meta:
+        model = Customer
+        fields = ["id", "external_id", "email", "balance"]

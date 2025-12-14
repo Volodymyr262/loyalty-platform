@@ -6,7 +6,7 @@ import factory
 from factory import fuzzy
 from factory.django import DjangoModelFactory
 
-from loyalty.models import Campaign, Customer
+from loyalty.models import Campaign, Customer, Transaction
 from tests.factories.users import OrganizationFactory
 
 
@@ -74,3 +74,23 @@ class RewardFactory(DjangoModelFactory):
     is_active = True
 
     organization = factory.SubFactory(OrganizationFactory)
+
+
+class TransactionFactory(factory.django.DjangoModelFactory):
+    """
+    Factory for generating Transaction instances.
+    """
+
+    class Meta:
+        model = Transaction
+
+    # Creates a dependent Customer instance if not provided
+    customer = factory.SubFactory(CustomerFactory)
+
+    # Automatically uses the organization from the related customer
+    # This ensures data consistency (tenant isolation)
+    organization = factory.SelfAttribute("customer.organization")
+
+    amount = 100.00
+    transaction_type = Transaction.EARN
+    description = factory.Faker("sentence")

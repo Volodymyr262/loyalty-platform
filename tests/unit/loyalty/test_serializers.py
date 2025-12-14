@@ -2,9 +2,10 @@
 Unit tests for Loyalty Serializers.
 """
 
+from core.context import set_current_organization_id
 from loyalty.models import Customer, Transaction
-from loyalty.serializers import AccrualSerializer, CampaignSerializer, TransactionReadSerializer
-from tests.factories.loyalty import CampaignFactory
+from loyalty.serializers import AccrualSerializer, CampaignSerializer, CustomerSerializer, TransactionReadSerializer
+from tests.factories.loyalty import CampaignFactory, CustomerFactory, TransactionFactory
 from tests.factories.users import UserFactory
 
 
@@ -90,3 +91,30 @@ class TestTransactionSerializers:
         assert serializer.is_valid() is False
         assert "amount" in serializer.errors
         assert "must be positive" in str(serializer.errors["amount"])
+
+
+class TestCustomerSerializer:
+    def test_serializer_includes_calculated_balance(self):
+        """
+        Serializer must include a 'balance' field derived from transactions.
+        """
+        # 1. Setup data
+        customer = CustomerFactory()
+
+        # ВАЖЛИВО: Встановлюємо контекст, щоб TenantAwareModel "бачила" записи
+        set_current_organization_id(customer.organization.id)
+
+        # Add transactions: +100, +50, -30 = 120 Total
+        # TransactionFactory автоматично використає організацію клієнта
+        TransactionFactory(customer=customer, amount=100, transaction_type=Transaction.EARN)
+        TransactionFactory(customer=customer, amount=50, transaction_type=Transaction.EARN)
+        TransactionFactory(customer=customer, amount=-30, transaction_type=Transaction.SPEND)
+
+        # 2. Serialize
+        serializer = CustomerSerializer(customer)
+        data = serializer.data
+
+        # 3. Assertions
+        assert "id" in data
+        assert "balance" in data
+        assert float(data["balance"]) == 120.00

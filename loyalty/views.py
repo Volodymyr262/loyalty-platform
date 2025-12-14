@@ -2,13 +2,14 @@
 API Views for the Loyalty application.
 """
 
-from rest_framework import mixins, viewsets
+from rest_framework import filters, mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 
-from loyalty.models import Campaign, Reward, Transaction
+from loyalty.models import Campaign, Customer, Reward, Transaction
 from loyalty.serializers import (
     AccrualSerializer,
     CampaignSerializer,
+    CustomerSerializer,
     RedemptionSerializer,
     RewardSerializer,
     TransactionReadSerializer,
@@ -80,3 +81,23 @@ class RewardViewSet(viewsets.ModelViewSet):
         Return rewards for the CURRENT tenant only.
         """
         return Reward.objects.all()
+
+
+class CustomerViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for viewing Customers and their current balance.
+    Creation is handled automatically via Accruals (Transactions).
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = CustomerSerializer
+
+    # Enable search functionality (e.g., ?search=CLIENT_ID)
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["external_id", "email"]
+
+    def get_queryset(self):
+        """
+        Return customers belonging ONLY to the current tenant.
+        """
+        return Customer.objects.filter(organization=self.request.user.organization)
