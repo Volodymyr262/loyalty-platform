@@ -22,7 +22,9 @@ class TenantContextMiddleware:
         # This prevents data leakage in environments that reuse threads
         reset_current_organization_id()
 
-        if request.path.startswith(("/admin/", "/schema/", "/api/schema/", "/health/", "/api/auth/")):
+        if request.path.startswith(
+            ("/admin/", "/schema/", "/api/schema/", "/health/", "/api/auth/", "/api/docs/", "/api/redoc/")
+        ):
             return self.get_response(request)
 
         # Extract API Key from headers

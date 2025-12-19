@@ -126,4 +126,24 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Loyalty Platform API",
+    "DESCRIPTION": "API for managing loyalty programs, customers, and transactions.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "TenantApiKey": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "HTTP_X_TENANT_API_KEY",
+                "description": "API Key of the Organization (Tenant)",
+            }
+        }
+    },
+    "SECURITY": [
+        {"TenantApiKey": []},
+    ],
+}
 AUTH_USER_MODEL = "users.User"
