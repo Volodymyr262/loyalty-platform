@@ -8,7 +8,9 @@ from rest_framework.test import APIClient
 
 from core.context import set_current_organization_id
 from loyalty.models import Customer, Transaction
-from tests.factories.loyalty import CampaignFactory
+
+# 1. ADDED: Import correct factories
+from tests.factories.loyalty import CampaignFactory, CustomerFactory, TransactionFactory
 from tests.factories.users import UserFactory
 
 
@@ -52,7 +54,8 @@ class TestAccrualAPI:
         assert transaction.amount == 100.00
 
     def test_accrue_points_existing_customer(self):
-        existing_customer = Customer.objects.create(
+        # FIX: Use CustomerFactory instead of objects.create
+        existing_customer = CustomerFactory(
             external_id="USER_EXISTING_99", organization=self.org, email="regular@example.com"
         )
 
@@ -84,6 +87,7 @@ class TestAccrualAPI:
         """
         Scenario: Campaign x2 multiplier.
         """
+        # Usage of CampaignFactory is correct here
         CampaignFactory(
             organization=self.org,
             name="Double Points",
@@ -100,6 +104,7 @@ class TestAccrualAPI:
         assert transaction.amount == 200
 
     def test_campaign_rule_min_amount(self):
+        # Usage of CampaignFactory is correct here
         CampaignFactory(
             organization=self.org,
             reward_type="bonus",
@@ -126,8 +131,6 @@ class TestAccrualAPI:
     def test_accrual_negative_amount_blocked_by_serializer(self):
         """
         Scenario: User sends negative amount to Accrual endpoint.
-        Old behavior: Service caught it.
-        New behavior: Serializer catches it before Service.
         """
         payload = {"external_id": "POOR_GUY", "amount": -100.00, "description": "Hacking attempt"}
 
@@ -154,20 +157,29 @@ class TestTransactionHistoryAPI:
         """
         GET /transactions/ should only return transactions for the current tenant.
         """
-        my_customer = Customer.objects.create(external_id="MY_CUST", organization=self.org)
-        Transaction.objects.create(customer=my_customer, amount=100, transaction_type=Transaction.EARN)
+        # FIX: Use TransactionFactory.
+        # It automatically creates a Customer for us.
+        # We explicitly pass 'customer__organization' to ensure it belongs to OUR org.
+        TransactionFactory(
+            customer__organization=self.org,
+            customer__external_id="MY_CUST",
+            amount=100,
+            transaction_type=Transaction.EARN,
+        )
 
+        # Create data for ANOTHER tenant
         other_user = UserFactory()
-        other_customer = Customer.objects.create(external_id="OTHER_CUST", organization=other_user.organization)
-        set_current_organization_id(other_user.organization.id)
-        Transaction.objects.create(customer=other_customer, amount=999, transaction_type=Transaction.EARN)
+        # We don't need to manually create customer/transaction separately.
+        # TransactionFactory handles the whole chain.
+        TransactionFactory(customer__organization=other_user.organization, amount=999)
 
-        # Switch back to our org
+        # Ensure we are requesting as the first org
         set_current_organization_id(self.org.id)
 
         response = self.client.get("/api/loyalty/transactions/", **self.headers)
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
 
+        # Should only see 1 transaction (ours), not the other one
+        assert len(response.data) == 1
         assert response.data[0]["points"] == 100

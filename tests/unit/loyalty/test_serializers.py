@@ -3,10 +3,9 @@ Unit tests for Loyalty Serializers.
 """
 
 from core.context import set_current_organization_id
-from loyalty.models import Customer, Transaction
+from loyalty.models import Transaction
 from loyalty.serializers import AccrualSerializer, CampaignSerializer, CustomerSerializer, TransactionReadSerializer
 from tests.factories.loyalty import CampaignFactory, CustomerFactory, TransactionFactory
-from tests.factories.users import UserFactory
 
 
 class TestCampaignSerializer:
@@ -41,13 +40,7 @@ class TestTransactionSerializers:
         Test TransactionReadSerializer (GET).
         It should return 'amount', 'transaction_type', etc.
         """
-        user = UserFactory()
-        org = user.organization
-        customer = Customer.objects.create(external_id="123", organization=org)
-
-        transaction = Transaction.objects.create(
-            customer=customer, organization=org, amount=500, transaction_type=Transaction.EARN, description="Test"
-        )
+        transaction = TransactionFactory(amount=500, transaction_type=Transaction.EARN, description="Test")
 
         serializer = TransactionReadSerializer(transaction)
         data = serializer.data
@@ -56,6 +49,7 @@ class TestTransactionSerializers:
         assert "points" in data
         assert data["points"] == 500
         assert "transaction_type" in data
+        assert data["transaction_type"] == Transaction.EARN
 
     def test_accrual_validation_required_fields(self):
         """
