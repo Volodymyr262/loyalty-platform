@@ -69,3 +69,22 @@ class TestTenantMiddleware:
 
         # Verify that AFTER the request, context is cleaned up (Safety)
         assert get_current_organization_id() is None
+
+    def test_malformed_jwt_token_is_ignored_by_middleware(self):
+        """
+        Scenario: Authorization header contains garbage.
+        Expected: Middleware catches the error and user remains Anonymous.
+        """
+        factory = RequestFactory()
+        # Not a valid JWT, just random string
+        request = factory.get("/api/public/", HTTP_AUTHORIZATION="Bearer invalid.garbage.token")
+
+        # Simulating middleware call
+        middleware = TenantContextMiddleware(dummy_view)
+        response = middleware(request)
+
+        assert response.status_code == 200
+        # Check that user is not set or is anonymous
+        # getattr is safe if 'user' was never set
+        user = getattr(request, "user", None)
+        assert user is None or not user.is_authenticated

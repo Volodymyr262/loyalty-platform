@@ -87,7 +87,8 @@ class TenantContextMiddleware:
         if path.startswith("/api/loyalty/") and not organization:
             return JsonResponse(
                 {
-                    "detail": "Organization context required. Provide X-Tenant-API-Key header OR login as a user belonging to an organization."
+                    "detail": "Organization context required. "
+                    "Provide X-Tenant-API-Key header OR login as a user belonging to an organization."
                 },
                 status=401,
             )
