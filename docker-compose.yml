@@ -47,5 +47,39 @@ services:
     # Command to start the dev server exposed on 0.0.0.0
     command: python manage.py runserver 0.0.0.0:8000
 
+  # --- Celery Worker (Task Executor) ---
+  celery_worker:
+    build: .
+    # '-A config' points to the folder containing celery.py
+    command: celery -A config worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - db
+      - web
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.local
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/loyalty_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=1
+
+  # --- Celery Beat (Periodic Task Scheduler) ---
+  celery_beat:
+    build: .
+    # Beat schedules tasks (like yearly expiration) but does not execute them
+    command: celery -A config beat --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - db
+      - web
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.local
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/loyalty_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=1
+
 volumes:
   postgres_data:

@@ -1,4 +1,5 @@
 import environ
+from celery.schedules import crontab
 
 from .base import *  # Import defaults from base.py
 
@@ -24,10 +25,28 @@ DATABASES = {
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        # Use 'REDIS_URL' from docker-compose, or fallback to default
         "LOCATION": env("REDIS_URL", default="redis://redis:6379/0"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         },
     }
+}
+
+# --- CELERY SETTINGS ---
+CELERY_BROKER_URL = env("REDIS_URL", default="redis://redis:6379/0")
+CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://redis:6379/0")
+
+CELERY_ACCEPT_CONTENT = ["application/json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+# Ensure TIME_ZONE is defined in base.py, otherwise set it here, e.g., 'UTC'
+CELERY_TIMEZONE = TIME_ZONE
+
+
+CELERY_BEAT_SCHEDULE = {
+    "expire_old_points_yearly": {
+        "task": "loyalty.tasks.process_yearly_points_expiration",
+        # Run at 00:30 on January 1st
+        "schedule": crontab(minute=30, hour=0, day_of_month=1, month_of_year=1),
+    },
 }
