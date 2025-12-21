@@ -2,16 +2,16 @@
 Unit tests for the Loyalty Service logic.
 """
 
-import datetime
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
 
 from core.context import set_current_organization_id
-from loyalty.models import Campaign
+from loyalty.models import Campaign, Transaction
 from loyalty.services import LoyaltyService, calculate_points
-from tests.factories.loyalty import CampaignFactory, CustomerFactory
+from tests.factories.loyalty import CampaignFactory, CustomerFactory, TransactionFactory
 from tests.factories.users import OrganizationFactory
 
 
@@ -123,7 +123,7 @@ class TestLoyaltyService:
         Scenario: Transaction happens inside the defined time window.
         Expected: Multiplier applied.
         """
-        mock_now = datetime.datetime(2025, 1, 1, 14, 0, 0, tzinfo=datetime.timezone.utc)
+        mock_now = datetime(2025, 1, 1, 14, 0, 0, tzinfo=timezone.utc)
 
         with patch("django.utils.timezone.now", return_value=mock_now):
             campaign = CampaignFactory(
@@ -143,7 +143,8 @@ class TestLoyaltyService:
         Scenario: Transaction happens outside the time window.
         Expected: Default points (campaign ignored).
         """
-        mock_now = datetime.datetime(2025, 1, 1, 18, 0, 0, tzinfo=datetime.timezone.utc)
+        # FIX: Removed 'datetime.' prefix
+        mock_now = datetime(2025, 1, 1, 18, 0, 0, tzinfo=timezone.utc)
 
         with patch("django.utils.timezone.now", return_value=mock_now):
             campaign = CampaignFactory(
@@ -157,3 +158,80 @@ class TestLoyaltyService:
 
             # Should be default 100
             assert points == 100
+
+
+class TestLoyaltyExpiration:
+    """
+    Tests for the N+1 points expiration strategy.
+    """
+
+    def test_expiration_fifo_logic(self):
+        """
+        Scenario:
+        - 2023: Earned 100 points.
+        - 2024: Earned 50 points.
+        - 2024: Spent 30 points (should come from 2023 balance).
+
+        Action:
+        - Run expiration for target year 2023.
+
+        Expected:
+        - 100 (Earned '23) - 30 (Spent Total) = 70 points should expire.
+        - Balance should be 50 (only 2024 points remain).
+        """
+        customer = CustomerFactory()
+        set_current_organization_id(customer.organization.id)
+        service = LoyaltyService()
+
+        # 1. Setup Data
+        # Date in 2023.
+        date_2023 = datetime(2023, 6, 1, tzinfo=timezone.utc)
+        tx1 = TransactionFactory(customer=customer, amount=100, transaction_type=Transaction.EARN)
+        # Manually update created_at because auto_now_add prevents setting it in factory
+        Transaction.objects.filter(id=tx1.id).update(created_at=date_2023)
+
+        # Date in 2024.
+        date_2024 = datetime(2024, 6, 1, tzinfo=timezone.utc)
+        tx2 = TransactionFactory(customer=customer, amount=50, transaction_type=Transaction.EARN)
+        Transaction.objects.filter(id=tx2.id).update(created_at=date_2024)
+
+        # Spend 30 points (happened recently)
+        service.process_transaction(customer, -30, "Coffee")
+
+        # Current Balance: 100 + 50 - 30 = 120
+        assert customer.get_balance() == 120
+
+        # 2. Execute Expiration for 2023
+        expired_amount = service.process_yearly_expiration(customer, target_year=2023)
+
+        # 3. Assertions
+        assert expired_amount == 70  # 100 old - 30 spent
+        assert customer.get_balance() == 50  # Only 2024 points (50) should remain
+
+        # Verify the transaction type
+        expiration_tx = Transaction.objects.filter(customer=customer, transaction_type=Transaction.EXPIRATION).last()
+        assert expiration_tx is not None
+        assert expiration_tx.amount == -70
+
+    def test_expiration_no_points_left(self):
+        """
+        Scenario: User spent everything they earned in the target year.
+        Expected: 0 points expire.
+        """
+        customer = CustomerFactory()
+        set_current_organization_id(customer.organization.id)
+        service = LoyaltyService()
+
+        # Earned 100 in 2023.
+        date_2023 = datetime(2023, 1, 1, tzinfo=timezone.utc)
+        tx = TransactionFactory(customer=customer, amount=100)
+        Transaction.objects.filter(id=tx.id).update(created_at=date_2023)
+
+        # Spent 100 later
+        service.process_transaction(customer, -100, "Big Purchase")
+
+        # Run expiration
+        expired = service.process_yearly_expiration(customer, target_year=2023)
+
+        assert expired == 0
+        assert customer.get_balance() == 0

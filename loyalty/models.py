@@ -93,11 +93,9 @@ class Transaction(TenantAwareModel):
 
     EARN = "earn"
     SPEND = "spend"
+    EXPIRATION = "expiration"
 
-    TRANSACTION_TYPES = [
-        (EARN, "Earn Points"),
-        (SPEND, "Spend Points"),
-    ]
+    TRANSACTION_TYPES = [(EARN, "Earn Points"), (SPEND, "Spend Points"), (EXPIRATION, "Points Expiration")]
 
     customer = models.ForeignKey(
         Customer,
