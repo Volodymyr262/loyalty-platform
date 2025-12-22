@@ -12,7 +12,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone as django_timezone
 
-from loyalty.models import Campaign, Transaction
+from loyalty.models import Campaign, Customer, Transaction
 
 
 class LoyaltyService:
@@ -37,6 +37,7 @@ class LoyaltyService:
         Returns:
             The created Transaction object.
         """
+        _ = Customer.objects.select_for_update().get(id=customer.id)
 
         # 1. Determine Transaction Type
         if transaction_type:
@@ -123,18 +124,15 @@ class LoyaltyService:
 
 def get_active_campaigns(organization_id):
     """
-        Retrieves active campaigns from Redis cache or Database.
-        Cache key: 'active_campaigns:{organization_id}'
-        TTL: 1 hour (3600 seconds).
-        """
+    Retrieves active campaigns from Redis cache or Database.
+    Cache key: 'active_campaigns:{organization_id}'
+    TTL: 1 hour (3600 seconds).
+    """
     cache_key = f"active_campaigns:{organization_id}"
     campaigns = cache.get(cache_key)
 
     if campaigns is None:
-        campaigns = list(Campaign.objects.filter(
-            organization_id=organization_id,
-            is_active=True
-        ))
+        campaigns = list(Campaign.objects.filter(organization_id=organization_id, is_active=True))
         cache.set(cache_key, campaigns, timeout=60 * 60)
 
     return campaigns
@@ -148,8 +146,6 @@ def calculate_points(amount, customer):
     amount_decimal = Decimal(amount)
     base_points = int(amount_decimal)
     best_points = base_points
-
-    organization = customer.organization
 
     now = django_timezone.localtime(django_timezone.now())
     current_time = now.time()

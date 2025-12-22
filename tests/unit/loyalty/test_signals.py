@@ -3,8 +3,8 @@ Tests for Django Signals and Cache Invalidation.
 """
 
 from django.core.cache import cache
+
 from core.context import set_current_organization_id
-from loyalty.models import Campaign
 from loyalty.services import get_active_campaigns
 from tests.factories.loyalty import CampaignFactory
 from tests.factories.users import OrganizationFactory
