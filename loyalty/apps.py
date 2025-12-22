@@ -9,3 +9,5 @@ class LoyaltyConfig(AppConfig):
         """
         Import signals when the app starts to register the receivers.
         """
+
+        import loyalty.signals  # noqa
