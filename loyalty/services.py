@@ -121,9 +121,29 @@ class LoyaltyService:
         return 0
 
 
+def get_active_campaigns(organization_id):
+    """
+        Retrieves active campaigns from Redis cache or Database.
+        Cache key: 'active_campaigns:{organization_id}'
+        TTL: 1 hour (3600 seconds).
+        """
+    cache_key = f"active_campaigns:{organization_id}"
+    campaigns = cache.get(cache_key)
+
+    if campaigns is None:
+        campaigns = list(Campaign.objects.filter(
+            organization_id=organization_id,
+            is_active=True
+        ))
+        cache.set(cache_key, campaigns, timeout=60 * 60)
+
+    return campaigns
+
+
 def calculate_points(amount, customer):
     """
     Calculates points based on Amount + Active Campaigns (Rules & Types).
+    Uses cached campaigns to reduce DB hits.
     """
     amount_decimal = Decimal(amount)
     base_points = int(amount_decimal)
@@ -134,7 +154,7 @@ def calculate_points(amount, customer):
     now = django_timezone.localtime(django_timezone.now())
     current_time = now.time()
 
-    campaigns = Campaign.objects.filter(organization=organization, is_active=True)
+    campaigns = get_active_campaigns(customer.organization.id)
 
     for campaign in campaigns:
         rules = campaign.rules or {}
