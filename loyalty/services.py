@@ -6,6 +6,7 @@ Handles point calculations, validations, and transaction processing.
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
@@ -57,7 +58,7 @@ class LoyaltyService:
             description=description,
             organization=customer.organization,
         )
-
+        cache.delete(f"customer_balance:{customer.id}")
         return new_transaction
 
     def process_yearly_expiration(self, customer, target_year: int) -> int:
