@@ -2,6 +2,7 @@
 Models for the Loyalty application..
 """
 
+from django.core.cache import cache
 from django.db import models
 from django.db.models import Sum
 
@@ -77,11 +78,19 @@ class Customer(TenantAwareModel):
         Calculates the current balance by summing up all related transactions.
         Returns 0 if no transactions exist.
         """
-        # 'transactions' is the related_name we defined in the Transaction model
-        result = self.transactions.aggregate(total=Sum("amount"))["total"]
+        cache_key = f"customer_balance:{self.id}"
+        balance = cache.get(cache_key)
 
-        # If there are no transactions, Sum returns None. We must return 0 instead.
-        return result or 0
+        if balance is not None:
+            return balance
+
+        # 3. Якщо в кеші немає — рахуємо через БД (важка операція)
+        balance = self.transactions.aggregate(total=Sum("amount"))["total"] or 0
+
+        # 4. Зберігаємо в Redis на довгий час (наприклад, 24 години)
+        cache.set(cache_key, balance, timeout=60 * 60 * 24)
+
+        return balance or 0
 
 
 class Transaction(TenantAwareModel):

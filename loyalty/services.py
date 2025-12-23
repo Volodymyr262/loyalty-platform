@@ -6,12 +6,13 @@ Handles point calculations, validations, and transaction processing.
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone as django_timezone
 
-from loyalty.models import Campaign, Transaction
+from loyalty.models import Campaign, Customer, Transaction
 
 
 class LoyaltyService:
@@ -36,6 +37,7 @@ class LoyaltyService:
         Returns:
             The created Transaction object.
         """
+        _ = Customer.objects.select_for_update().get(id=customer.id)
 
         # 1. Determine Transaction Type
         if transaction_type:
@@ -57,7 +59,7 @@ class LoyaltyService:
             description=description,
             organization=customer.organization,
         )
-
+        cache.delete(f"customer_balance:{customer.id}")
         return new_transaction
 
     def process_yearly_expiration(self, customer, target_year: int) -> int:
@@ -120,20 +122,35 @@ class LoyaltyService:
         return 0
 
 
+def get_active_campaigns(organization_id):
+    """
+    Retrieves active campaigns from Redis cache or Database.
+    Cache key: 'active_campaigns:{organization_id}'
+    TTL: 1 hour (3600 seconds).
+    """
+    cache_key = f"active_campaigns:{organization_id}"
+    campaigns = cache.get(cache_key)
+
+    if campaigns is None:
+        campaigns = list(Campaign.objects.filter(organization_id=organization_id, is_active=True))
+        cache.set(cache_key, campaigns, timeout=60 * 60)
+
+    return campaigns
+
+
 def calculate_points(amount, customer):
     """
     Calculates points based on Amount + Active Campaigns (Rules & Types).
+    Uses cached campaigns to reduce DB hits.
     """
     amount_decimal = Decimal(amount)
     base_points = int(amount_decimal)
     best_points = base_points
 
-    organization = customer.organization
-
     now = django_timezone.localtime(django_timezone.now())
     current_time = now.time()
 
-    campaigns = Campaign.objects.filter(organization=organization, is_active=True)
+    campaigns = get_active_campaigns(customer.organization.id)
 
     for campaign in campaigns:
         rules = campaign.rules or {}

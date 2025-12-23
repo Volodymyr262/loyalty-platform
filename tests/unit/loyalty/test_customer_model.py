@@ -3,6 +3,7 @@ Unit tests for the Customer model.
 """
 
 import pytest
+from django.core.cache import cache
 from django.db import IntegrityError
 
 from core.context import set_current_organization_id
@@ -87,5 +88,6 @@ class TestCustomerModel:
         Transaction.objects.create(customer=customer, amount=-30, transaction_type="spend", organization=org)
         Transaction.objects.create(customer=customer, amount=10, transaction_type="earn", organization=org)
 
+        cache.clear()
         # Verify calculated balance (100 - 30 + 10 = 80)
         assert customer.get_balance() == 80
