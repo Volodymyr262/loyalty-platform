@@ -24,6 +24,8 @@ class Campaign(TenantAwareModel):
 
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+
+    # multiplier when TYPE=MULTIPLIER or fixed amount when TYPE=BONUS
     points_value = models.PositiveIntegerField()
 
     reward_type = models.CharField(max_length=20, choices=REWARD_TYPES, default=TYPE_MULTIPLIER)

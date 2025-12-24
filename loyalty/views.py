@@ -3,7 +3,7 @@ API Views for the Loyalty application.
 """
 
 from rest_framework import filters, mixins, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from loyalty.models import Campaign, Customer, Reward, Transaction
 from loyalty.serializers import (
@@ -14,6 +14,7 @@ from loyalty.serializers import (
     RewardSerializer,
     TransactionReadSerializer,
 )
+from users.authentication import ApiKeyAuthentication
 
 
 class CampaignViewSet(viewsets.ModelViewSet):
@@ -54,7 +55,8 @@ class AccrualViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     Endpoint for accrue (Earn).
     """
 
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [AllowAny]
     serializer_class = AccrualSerializer
 
 
@@ -64,7 +66,8 @@ class RedemptionViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     Endpoint for redemption (Spend).
     """
 
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [AllowAny]
     serializer_class = RedemptionSerializer
 
 
@@ -89,7 +92,8 @@ class CustomerViewSet(viewsets.ReadOnlyModelViewSet):
     Creation is handled automatically via Accruals (Transactions).
     """
 
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [AllowAny]
     serializer_class = CustomerSerializer
 
     # Enable search functionality (e.g., ?search=CLIENT_ID)

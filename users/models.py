@@ -17,12 +17,28 @@ class Organization(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    api_key = models.CharField(max_length=64, unique=True, db_index=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
+
+
+class OrganizationApiKey(models.Model):
+    """
+    Separate model for managing API keys.
+    Allows key rotation and multiple keys per organization.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="api_keys")
+    key = models.CharField(max_length=64, unique=True, db_index=True)
+    name = models.CharField(max_length=50, help_text="e.g. 'Website' or 'POS Terminal 1'")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.organization.name} - {self.name}"
 
 
 class User(AbstractUser):

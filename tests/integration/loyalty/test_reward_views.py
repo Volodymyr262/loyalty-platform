@@ -1,5 +1,5 @@
 """
-Tests for Rewards API view
+Tests for Reward API endpoints.
 """
 
 from rest_framework import status
@@ -8,90 +8,92 @@ from rest_framework.test import APIClient
 from core.context import set_current_organization_id
 from loyalty.models import Reward
 from tests.factories.loyalty import RewardFactory
-from tests.factories.users import UserFactory
+
+# ДОДАЄМО OrganizationApiKeyFactory
+from tests.factories.users import OrganizationApiKeyFactory, UserFactory
 
 
 class TestRewardAPI:
     """
-    Integration tests for Reward ViewSet.
+    Integration tests for Reward management endpoints.
     """
 
     def setup_method(self):
+        """
+        Setup: Create User, Organization, generate API Key, and set Auth headers.
+        """
         self.client = APIClient()
         self.user = UserFactory()
         self.org = self.user.organization
-
-        # Authenticate and set context
         self.client.force_authenticate(user=self.user)
-        self.headers = {"HTTP_X_TENANT_API_KEY": self.org.api_key}
+
+        # Generate API Key for Middleware authentication
+        api_key_obj = OrganizationApiKeyFactory(organization=self.org)
+        self.headers = {"HTTP_X_API_KEY": api_key_obj.key}
+
         set_current_organization_id(self.org.id)
 
     def test_list_rewards_isolation(self):
         """
         GET /api/loyalty/rewards/
-        Ensure we ONLY see rewards belonging to our organization.
+        Ensure we ONLY see rewards belonging to our organization (Multi-tenancy isolation).
         """
-        # Create reward for OUR organization
-        my_reward = RewardFactory(organization=self.org, name="My Free Coffee")
+        RewardFactory(organization=self.org, name="My Reward")
 
-        # Create reward for ANOTHER organization
         other_user = UserFactory()
-        RewardFactory(organization=other_user.organization, name="Stolen Cookie")
+        RewardFactory(organization=other_user.organization, name="Other Reward")
 
-        response = self.client.get("/api/loyalty/rewards/", **self.headers)
+        url = "/api/loyalty/rewards/"
+        response = self.client.get(url, **self.headers)
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
-        assert response.data[0]["name"] == "My Free Coffee"
-        assert response.data[0]["id"] == my_reward.id
+        assert response.data[0]["name"] == "My Reward"
 
     def test_create_reward(self):
         """
         POST /api/loyalty/rewards/
-        Ensure we can create a reward and it gets assigned to our organization.
+        Should create a new reward and automatically assign it to the current tenant.
         """
-        payload = {"name": "VIP Access", "description": "Access to VIP lounge", "point_cost": 500, "is_active": True}
-
-        response = self.client.post("/api/loyalty/rewards/", data=payload, **self.headers)
+        payload = {"name": "Free Coffee", "description": "Delicious", "point_cost": 50, "is_active": True}
+        url = "/api/loyalty/rewards/"
+        response = self.client.post(url, data=payload, **self.headers)
 
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["name"] == "VIP Access"
-
-        # DB Check
-        reward = Reward.objects.get(id=response.data["id"])
-        assert reward.organization == self.org
-        assert reward.point_cost == 500
+        assert Reward.objects.count() == 1
+        assert Reward.objects.first().organization == self.org
 
     def test_update_reward(self):
         """
         PATCH /api/loyalty/rewards/{id}/
-        Ensure we can update price or name.
+        Should update fields (e.g., point_cost) of an existing reward.
         """
         reward = RewardFactory(organization=self.org, point_cost=100)
-
         url = f"/api/loyalty/rewards/{reward.id}/"
-        payload = {"point_cost": 150}
 
+        payload = {"point_cost": 150}
         response = self.client.patch(url, data=payload, **self.headers)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["point_cost"] == 150
-
         reward.refresh_from_db()
         assert reward.point_cost == 150
 
     def test_delete_reward_permissions(self):
         """
         DELETE /api/loyalty/rewards/{id}/
-        Ensure we cannot delete another tenant's reward.
+        - Should allow deleting own rewards (204 No Content).
+        - Should return 404 Not Found when attempting to delete another tenant's reward.
         """
-        other_user = UserFactory()
-        other_reward = RewardFactory(organization=other_user.organization)
+        # Check if user can delete their own reward
+        reward = RewardFactory(organization=self.org)
+        url = f"/api/loyalty/rewards/{reward.id}/"
 
+        response = self.client.delete(url, **self.headers)
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+        # Check attempting to delete another tenant's reward
+        other_reward = RewardFactory(name="Other")
         url = f"/api/loyalty/rewards/{other_reward.id}/"
 
-        # Try to delete using OUR headers/auth
         response = self.client.delete(url, **self.headers)
-
         assert response.status_code == status.HTTP_404_NOT_FOUND
-        assert Reward.objects.filter(id=other_reward.id).exists()

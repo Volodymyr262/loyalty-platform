@@ -58,12 +58,20 @@ class AccrualSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Accrual amount must be positive.")
         return value
 
+    def _get_organization(self):
+        request = self.context.get("request")
+        if request.auth and hasattr(request.auth, "organization"):
+            return request.auth.organization
+        if request.user and request.user.is_authenticated:
+            return request.user.organization
+        raise serializers.ValidationError("Organization context missing.")
+
     def create(self, validated_data):
         external_id = validated_data.pop("external_id")
         email = validated_data.pop("email", None)
         money_amount = validated_data.pop("amount")
 
-        organization = self.context["request"].user.organization
+        organization = self._get_organization()
 
         customer, _ = Customer.objects.get_or_create(
             organization=organization, external_id=external_id, defaults={"email": email}
@@ -91,8 +99,14 @@ class RedemptionSerializer(serializers.Serializer):
     reward_id = serializers.IntegerField()
 
     def validate(self, data):
-        user = self.context["request"].user
-        organization = user.organization
+        request = self.context.get("request")
+
+        if request.auth and hasattr(request.auth, "organization"):
+            organization = request.auth.organization
+        elif request.user and request.user.is_authenticated:
+            organization = request.user.organization
+        else:
+            raise serializers.ValidationError("Authentication required.")
 
         # 1. Validate Reward
         try:
