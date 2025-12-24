@@ -95,8 +95,15 @@ class RedemptionSerializer(serializers.Serializer):
     Serializer specifically for spending points.
     """
 
-    customer_external_id = serializers.CharField()
-    reward_id = serializers.IntegerField()
+    # INPUTS (Write Only) - DRF will use these for validation but won't look for them on the Transaction model
+    customer_external_id = serializers.CharField(write_only=True)
+    reward_id = serializers.IntegerField(write_only=True)
+
+    # OUTPUTS (Read Only) - These will be taken from the created Transaction object
+    id = serializers.IntegerField(read_only=True)
+    amount = serializers.IntegerField(read_only=True)
+    description = serializers.CharField(read_only=True)
+    transaction_type = serializers.CharField(read_only=True)
 
     def validate(self, data):
         request = self.context.get("request")
@@ -114,14 +121,14 @@ class RedemptionSerializer(serializers.Serializer):
             if not reward.is_active:
                 raise serializers.ValidationError("This reward is currently inactive.")
             data["reward"] = reward
-        except Reward.DoesNotExist as e:  # Catch the exception as variable 'e'
+        except Reward.DoesNotExist as e:
             raise serializers.ValidationError("Reward not found.") from e
 
         # 2. Validate Customer
         try:
             customer = Customer.objects.get(external_id=data["customer_external_id"], organization=organization)
             data["customer"] = customer
-        except Customer.DoesNotExist as e:  # Catch the exception as variable 'e'
+        except Customer.DoesNotExist as e:
             raise serializers.ValidationError("Customer not found.") from e
 
         return data
@@ -129,11 +136,12 @@ class RedemptionSerializer(serializers.Serializer):
     def create(self, validated_data):
         customer = validated_data["customer"]
         reward = validated_data["reward"]
-        points_to_spend = -reward.point_cost
+        points_to_spend = -reward.point_cost  # Convert cost to negative transaction
 
         service = LoyaltyService()
 
         try:
+            # This returns a Transaction instance
             transaction = service.process_transaction(
                 customer=customer, amount=points_to_spend, description=f"Redeemed: {reward.name}"
             )
