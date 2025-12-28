@@ -58,12 +58,20 @@ class AccrualSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Accrual amount must be positive.")
         return value
 
+    def _get_organization(self):
+        request = self.context.get("request")
+        if request.auth and hasattr(request.auth, "organization"):
+            return request.auth.organization
+        if request.user and request.user.is_authenticated:
+            return request.user.organization
+        raise serializers.ValidationError("Organization context missing.")
+
     def create(self, validated_data):
         external_id = validated_data.pop("external_id")
         email = validated_data.pop("email", None)
         money_amount = validated_data.pop("amount")
 
-        organization = self.context["request"].user.organization
+        organization = self._get_organization()
 
         customer, _ = Customer.objects.get_or_create(
             organization=organization, external_id=external_id, defaults={"email": email}
@@ -87,12 +95,25 @@ class RedemptionSerializer(serializers.Serializer):
     Serializer specifically for spending points.
     """
 
-    customer_external_id = serializers.CharField()
-    reward_id = serializers.IntegerField()
+    # INPUTS (Write Only) - DRF will use these for validation but won't look for them on the Transaction model
+    customer_external_id = serializers.CharField(write_only=True)
+    reward_id = serializers.IntegerField(write_only=True)
+
+    # OUTPUTS (Read Only) - These will be taken from the created Transaction object
+    id = serializers.IntegerField(read_only=True)
+    amount = serializers.IntegerField(read_only=True)
+    description = serializers.CharField(read_only=True)
+    transaction_type = serializers.CharField(read_only=True)
 
     def validate(self, data):
-        user = self.context["request"].user
-        organization = user.organization
+        request = self.context.get("request")
+
+        if request.auth and hasattr(request.auth, "organization"):
+            organization = request.auth.organization
+        elif request.user and request.user.is_authenticated:
+            organization = request.user.organization
+        else:
+            raise serializers.ValidationError("Authentication required.")
 
         # 1. Validate Reward
         try:
@@ -100,14 +121,14 @@ class RedemptionSerializer(serializers.Serializer):
             if not reward.is_active:
                 raise serializers.ValidationError("This reward is currently inactive.")
             data["reward"] = reward
-        except Reward.DoesNotExist as e:  # Catch the exception as variable 'e'
+        except Reward.DoesNotExist as e:
             raise serializers.ValidationError("Reward not found.") from e
 
         # 2. Validate Customer
         try:
             customer = Customer.objects.get(external_id=data["customer_external_id"], organization=organization)
             data["customer"] = customer
-        except Customer.DoesNotExist as e:  # Catch the exception as variable 'e'
+        except Customer.DoesNotExist as e:
             raise serializers.ValidationError("Customer not found.") from e
 
         return data
@@ -115,11 +136,12 @@ class RedemptionSerializer(serializers.Serializer):
     def create(self, validated_data):
         customer = validated_data["customer"]
         reward = validated_data["reward"]
-        points_to_spend = -reward.point_cost
+        points_to_spend = -reward.point_cost  # Convert cost to negative transaction
 
         service = LoyaltyService()
 
         try:
+            # This returns a Transaction instance
             transaction = service.process_transaction(
                 customer=customer, amount=points_to_spend, description=f"Redeemed: {reward.name}"
             )

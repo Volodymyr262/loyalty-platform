@@ -5,7 +5,7 @@ Factories for the users application (tenants and users)
 import factory
 from factory.django import DjangoModelFactory
 
-from users.models import Organization, User
+from users.models import Organization, OrganizationApiKey, User
 
 
 class OrganizationFactory(DjangoModelFactory):
@@ -18,8 +18,6 @@ class OrganizationFactory(DjangoModelFactory):
         model = Organization
 
     name = factory.Faker("company")
-    # Generate a unique API key string using UUID format for realism
-    api_key = factory.Faker("uuid4")
     is_active = True
 
 
@@ -35,3 +33,13 @@ class UserFactory(factory.django.DjangoModelFactory):
     first_name = factory.Faker("first_name")
     last_name = factory.Faker("last_name")
     organization = factory.SubFactory(OrganizationFactory)
+
+
+class OrganizationApiKeyFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = OrganizationApiKey
+
+    organization = factory.SubFactory(OrganizationFactory)
+    name = "Default Test Key"
+    key = factory.Faker("md5")  # Or specific logic to generate key
+    is_active = True
