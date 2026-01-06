@@ -86,10 +86,8 @@ class Customer(TenantAwareModel):
         if balance is not None:
             return balance
 
-        # 3. Якщо в кеші немає — рахуємо через БД (важка операція)
         balance = self.transactions.aggregate(total=Sum("amount"))["total"] or 0
 
-        # 4. Зберігаємо в Redis на довгий час (наприклад, 24 години)
         cache.set(cache_key, balance, timeout=60 * 60 * 24)
 
         return balance or 0

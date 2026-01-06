@@ -3,13 +3,14 @@ Service layer for Loyalty business logic.
 Handles point calculations, validations, and transaction processing.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone as django_timezone
 
 from loyalty.models import Campaign, Customer, Transaction
@@ -195,3 +196,61 @@ def calculate_points(amount, customer):
             best_points = calculated_points
 
     return best_points
+
+
+class DashboardAnalyticsService:
+    """
+    Encapsulates logic for calculating Dashboard metrics.
+    Decouples data extraction from API presentation.
+    """
+
+    @staticmethod
+    def get_kpi(queryset):
+        """
+        Calculates high-level KPIs: Customers, Liability, Redemption Rate.
+        """
+        stats = queryset.aggregate(
+            total_customers=Count("customer", distinct=True),
+            total_issued=Coalesce(Sum("amount", filter=Q(transaction_type="earn")), 0),
+            total_redeemed=Coalesce(Sum("amount", filter=Q(transaction_type="spend")), 0),
+            current_liability=Coalesce(Sum("amount"), 0),
+        )
+
+        # Business Logic: Calculate Rate
+        issued = stats["total_issued"]
+        redeemed = abs(stats["total_redeemed"])
+
+        redemption_rate = 0.0
+        if issued > 0:
+            redemption_rate = round((redeemed / issued) * 100, 1)
+
+        return {
+            "total_customers": stats["total_customers"],
+            "current_liability": stats["current_liability"],
+            "redemption_rate": redemption_rate,
+        }
+
+    @staticmethod
+    def get_timeline(queryset, days=30):
+        """
+        Generates daily stats for charts (Last N days).
+        """
+        # FIX: Replaced timezone.now() with django_timezone.now()
+        start_date = django_timezone.now() - timedelta(days=days)
+
+        timeline_qs = (
+            queryset.filter(created_at__gte=start_date)
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(
+                issued=Coalesce(Sum("amount", filter=Q(transaction_type="earn")), 0),
+                redeemed=Coalesce(Sum("amount", filter=Q(transaction_type="spend")), 0),
+            )
+            .order_by("date")
+        )
+
+        # Formatting data for frontend
+        return [
+            {"date": entry["date"], "issued": entry["issued"], "redeemed": abs(entry["redeemed"])}
+            for entry in timeline_qs
+        ]

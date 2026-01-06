@@ -30,7 +30,6 @@ INSTALLED_APPS = [
     # Local apps (LaaS modules)
     "users",
     "core",
-    "finance",
     "loyalty",
 ]
 

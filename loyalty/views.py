@@ -4,6 +4,8 @@ API Views for the Loyalty application.
 
 from rest_framework import filters, mixins, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from loyalty.models import Campaign, Customer, Reward, Transaction
 from loyalty.serializers import (
@@ -14,6 +16,7 @@ from loyalty.serializers import (
     RewardSerializer,
     TransactionReadSerializer,
 )
+from loyalty.services import DashboardAnalyticsService
 from users.authentication import ApiKeyAuthentication
 
 
@@ -105,3 +108,20 @@ class CustomerViewSet(viewsets.ReadOnlyModelViewSet):
         Return customers belonging ONLY to the current tenant.
         """
         return Customer.objects.all()
+
+
+class DashboardStatsView(APIView):
+    """
+    GET /api/loyalty/stats/
+    """
+
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = Transaction.objects.all()
+
+        kpi_data = DashboardAnalyticsService.get_kpi(queryset)
+        timeline_data = DashboardAnalyticsService.get_timeline(queryset)
+
+        return Response({"kpi": kpi_data, "timeline": timeline_data})
