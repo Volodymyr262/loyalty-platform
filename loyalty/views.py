@@ -115,7 +115,6 @@ class DashboardStatsView(APIView):
     GET /api/loyalty/stats/
     """
 
-    authentication_classes = [ApiKeyAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
