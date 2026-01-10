@@ -2,6 +2,7 @@
 API Views for the Loyalty application.
 """
 
+from django.core.cache import cache
 from rest_framework import filters, mixins, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -118,9 +119,26 @@ class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        queryset = Transaction.objects.all()
+        # Construct a unique cache key for this tenant
+        # Example key: "dashboard_stats:f10e1213-2df4..."
+        org_id = request.user.organization_id
+        cache_key = f"dashboard_stats:{org_id}"
+
+        # Try to get data from Redis
+        cached_data = cache.get(cache_key)
+
+        if cached_data:
+            # HIT! Return data immediately without touching DB
+            return Response(cached_data)
+
+        # MISS! Calculate data using DB
+        queryset = Transaction.objects.filter()
 
         kpi_data = DashboardAnalyticsService.get_kpi(queryset)
         timeline_data = DashboardAnalyticsService.get_timeline(queryset)
 
-        return Response({"kpi": kpi_data, "timeline": timeline_data})
+        response_data = {"kpi": kpi_data, "timeline": timeline_data}
+
+        cache.set(cache_key, response_data, timeout=60 * 60)
+
+        return Response(response_data)

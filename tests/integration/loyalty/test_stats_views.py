@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -129,3 +131,91 @@ class TestDashboardStatsAPI:
 
         # Assert
         assert kpi["current_liability"] == 100.0  # NOT 5100
+
+    def test_caching_performance(self):
+        """
+        Scenario:
+        1. First request -> Hits DB (Calculates stats).
+        2. Second request -> Hits Redis (Returns cached result).
+        3. DB Query count should be significantly lower on the second call.
+        """
+        # Create data to make sure DB actually has work to do
+        c = CustomerFactory(organization=self.org)
+        TransactionFactory(customer=c, amount=100)
+
+        # Cold Cache Request
+        with CaptureQueriesContext(connection) as ctx_cold:
+            response_1 = self.client.get(self.url, **self.headers)
+
+        assert response_1.status_code == 200
+        queries_cold = len(ctx_cold.captured_queries)
+
+        # Warm Cache Request
+        with CaptureQueriesContext(connection) as ctx_warm:
+            response_2 = self.client.get(self.url, **self.headers)
+
+        assert response_2.status_code == 200
+        queries_warm = len(ctx_warm.captured_queries)
+
+        # Assertions
+        assert response_1.data == response_2.data
+        # We expect FEWER queries.
+        # Note: We don't assert 0 queries because Auth Middleware usually hits DB to check User/ApiKey.
+        # But the heavy aggregation queries on 'loyalty_transaction' should be gone.
+        assert (
+            queries_warm < queries_cold
+        ), f"Expected cache to reduce queries. Cold: {queries_cold}, Warm: {queries_warm}"
+
+    def test_cache_invalidation_signal(self):
+        """
+        Scenario:
+        1. Get Stats (Cache is set).
+        2. Create NEW Transaction (Signal should clear Cache).
+        3. Get Stats again (Should hit DB and show updated data).
+        """
+        customer = CustomerFactory(organization=self.org)
+        TransactionFactory(customer=customer, amount=100, transaction_type="earn")
+
+        # Initial Request (Liablity: 100)
+        resp_1 = self.client.get(self.url, **self.headers)
+        assert resp_1.data["kpi"]["current_liability"] == 100.0
+
+        # Trigger Signal (New Transaction)
+        # This acts as a "Write" operation that should invalidate the read cache
+        TransactionFactory(customer=customer, amount=50, transaction_type="earn")
+
+        # Request again. If cache wasn't cleared, we would still see 100.
+        resp_2 = self.client.get(self.url, **self.headers)
+
+        # Assert that we see FRESH data immediately
+        assert resp_2.data["kpi"]["current_liability"] == 150.0
+
+    def test_cache_tenant_isolation(self):
+        """
+        Scenario:
+        1. Tenant A caches their stats.
+        2. Tenant B accesses their stats.
+        3. Verify Tenant B does NOT get Tenant A's cached data.
+        """
+        # Setup Tenant A Data
+        TransactionFactory(customer__organization=self.org, amount=100)
+
+        # Tenant A primes the cache
+        resp_a = self.client.get(self.url, **self.headers)
+        assert resp_a.data["kpi"]["current_liability"] == 100.0
+
+        # Setup Tenant B
+        user_b = UserFactory()
+        org_b = user_b.organization
+        api_key_b = OrganizationApiKeyFactory(organization=org_b)
+        headers_b = {"HTTP_X_API_KEY": api_key_b.key}
+
+        # Tenant B has DIFFERENT data
+        TransactionFactory(customer__organization=org_b, amount=999)
+
+        # Tenant B Request
+        self.client.force_authenticate(user=user_b)
+        resp_b = self.client.get(self.url, **headers_b)
+
+        # Assert Tenant B sees THEIR data, not A's cache
+        assert resp_b.data["kpi"]["current_liability"] == 999.0
