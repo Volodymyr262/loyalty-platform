@@ -1,41 +1,62 @@
+"""
+Celery tasks for Loyalty application.
+"""
+
 from celery import shared_task
 from django.utils import timezone
 
+from core.context import reset_current_organization_id, set_current_organization_id
 from loyalty.models import Customer
 from loyalty.services import LoyaltyService
+from users.models import Organization
+
+
+@shared_task
+def process_organization_expiration(organization_id, target_year):
+    """
+    Worker Task: Processes expiration for a SINGLE organization.
+    Crucial: Sets the context so TenantAwareManager works correctly.
+    """
+    set_current_organization_id(organization_id)
+
+    try:
+        customers = Customer.objects.iterator(chunk_size=1000)
+        service = LoyaltyService()
+
+        count = 0
+        total_expired = 0
+
+        for customer in customers:
+            try:
+                amount = service.process_yearly_expiration(customer, target_year)
+                if amount > 0:
+                    total_expired += amount
+                    count += 1
+            except Exception as e:
+                # Log error specific to this customer, but don't stop the loop
+                print(f"[Org {organization_id}] Error processing customer {customer.id}: {e}")
+
+        return f"Org {organization_id}: Expired {total_expired} points for {count} customers."
+
+    finally:
+        # Always clean up context
+        reset_current_organization_id()
 
 
 @shared_task
 def process_yearly_points_expiration():
     """
-    Periodic task to run the N+1 expiration strategy.
-    Should be scheduled to run once a year (e.g., Jan 1st).
+    Master Task (Dispatcher).
+    Finds all active tenants and schedules a job for each.
     """
-    # Logic N+1:
-    # if today 2026 , we expire points from 2024.
-    # so points lifetime is at least 1 year
     today = timezone.now()
     target_year = today.year - 2
 
-    print(f"Starting points expiration task for target year: {target_year}")
+    active_org_ids = Organization.objects.filter(is_active=True).values_list("id", flat=True)
 
-    batch_size = 1000
-    service = LoyaltyService()
+    print(f" Dispatching expiration tasks for {len(active_org_ids)} organizations. Target Year: {target_year}")
 
-    processed_count = 0
-    expired_points_total = 0
+    for org_id in active_org_ids:
+        process_organization_expiration.delay(org_id, target_year)
 
-    # Using iterator() to reduce memory usage
-    customers = Customer.objects.all().iterator(chunk_size=batch_size)
-
-    for customer in customers:
-        try:
-            expired = service.process_yearly_expiration(customer, target_year)
-            if expired > 0:
-                expired_points_total += expired
-                print(f"Expired {expired} points for Customer {customer.id}")
-            processed_count += 1
-        except Exception as e:
-            print(f"Error processing customer {customer.id}: {e}")
-
-    return f"Finished. Processed {processed_count} customers. Total expired: {expired_points_total}"
+    return f"Dispatched {len(active_org_ids)} tasks."

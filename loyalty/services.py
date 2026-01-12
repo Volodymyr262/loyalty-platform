@@ -40,19 +40,19 @@ class LoyaltyService:
         """
         _ = Customer.objects.select_for_update().get(id=customer.id)
 
-        # 1. Determine Transaction Type
+        # Determine Transaction Type
         if transaction_type:
             tx_type = transaction_type
         else:
             tx_type = Transaction.SPEND if amount < 0 else Transaction.EARN
 
-        # 2. Validation for spending
+        # Validation for spending
         if amount < 0:
             current_balance = customer.get_balance()
             if current_balance + amount < 0:
                 raise ValidationError(f"Insufficient funds. Balance: {current_balance}, Required: {abs(amount)}")
 
-        # 3. Create Transaction
+        # Create Transaction
         new_transaction = Transaction.objects.create(
             customer=customer,
             amount=amount,
@@ -79,10 +79,9 @@ class LoyaltyService:
             int: The amount of points expired (positive integer).
         """
 
-        # Define the cutoff date: The very last second of the target year.
         cutoff_date = datetime(target_year, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
 
-        # 1. Calculate Total Earned Points up to the end of the target year.
+        # Calculate Total Earned Points up to the end of the target year.
         # We include all previous years to be safe, assuming previous years were handled
         # by prior runs. If this is the first run, it effectively cleans up everything old.
         earned_aggregate = (
@@ -92,7 +91,7 @@ class LoyaltyService:
             or 0
         )
 
-        # 2. Calculate Total Spent/Expired Points (Lifetime).
+        # Calculate Total Spent/Expired Points (Lifetime).
         # We look at all spending ever occurred (even after the target year),
         # because customers always spend their "oldest" points first (FIFO).
         used_aggregate = (
@@ -105,7 +104,7 @@ class LoyaltyService:
         # Convert negative spending to positive number for calculation
         total_used = abs(used_aggregate)
 
-        # 3. Calculate Remainder
+        # Calculate Remainder
         # Example: Earned 1000 in 2023. Spent 200 in 2024.
         # Points to expire = 1000 - 200 = 800.
         points_to_expire = earned_aggregate - total_used

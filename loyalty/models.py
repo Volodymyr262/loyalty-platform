@@ -125,10 +125,10 @@ class Transaction(TenantAwareModel):
 
     class Meta:
         indexes = [
-            models.Index(fields=['created_at']),
-            models.Index(fields=['customer', '-created_at']),
-            models.Index(fields=['transaction_type']),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["customer", "-created_at"]),
+            models.Index(fields=["transaction_type"]),
         ]
 
         # Order by newest first by default
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
