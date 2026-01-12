@@ -122,3 +122,13 @@ class Transaction(TenantAwareModel):
 
     def __str__(self):
         return f"{self.customer} - {self.amount} ({self.get_transaction_type_display()})"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['customer', '-created_at']),
+            models.Index(fields=['transaction_type']),
+        ]
+
+        # Order by newest first by default
+        ordering = ['-created_at']
