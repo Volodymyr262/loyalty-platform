@@ -78,7 +78,6 @@ class TestYearlyExpirationTask:
 
         result = process_yearly_points_expiration()
 
-        # Assert
         assert "Dispatched" in result
 
         assert mock_delay.called
