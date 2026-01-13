@@ -8,8 +8,8 @@ from decimal import Decimal
 
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db import IntegrityError, transaction
+from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone as django_timezone
 
@@ -26,18 +26,10 @@ class LoyaltyService:
         self, customer, amount: int, description: str = "", transaction_type: str = None
     ) -> Transaction:
         """
-        Safely processes a point transaction.
-
-        Args:
-            customer: The Customer instance.
-            amount: Integer (positive to earn, negative to spend).
-            description: Reason for the transaction.
-            transaction_type: Optional override (e.g., for EXPIRATION).
-                              If None, it is inferred from amount.
-
-        Returns:
-            The created Transaction object.
+        Safely processes a point transaction and updates customer balance.
         """
+        # Lock not strictly necessary for F() update, but good for consistency
+        # if you do other checks. Can be removed for max speed, but safer to keep.
         _ = Customer.objects.select_for_update().get(id=customer.id)
 
         # Determine Transaction Type
@@ -46,13 +38,15 @@ class LoyaltyService:
         else:
             tx_type = Transaction.SPEND if amount < 0 else Transaction.EARN
 
-        # Validation for spending
+        # Validation (Python level - for nice error messages)
+        # Since get_balance() is now O(1), this is fast.
         if amount < 0:
-            current_balance = customer.get_balance()
-            if current_balance + amount < 0:
-                raise ValidationError(f"Insufficient funds. Balance: {current_balance}, Required: {abs(amount)}")
+            if customer.current_balance + amount < 0:
+                raise ValidationError(
+                    f"Insufficient funds. Balance: {customer.current_balance}, Required: {abs(amount)}"
+                )
 
-        # Create Transaction
+        # Create Transaction (History)
         new_transaction = Transaction.objects.create(
             customer=customer,
             amount=amount,
@@ -60,30 +54,29 @@ class LoyaltyService:
             description=description,
             organization=customer.organization,
         )
-        cache.delete(f"customer_balance:{customer.id}")
+
+        # Update Balance Atomically (The Snapshot)
+        try:
+            Customer.objects.filter(id=customer.id).update(current_balance=F("current_balance") + amount)
+        except IntegrityError:
+            # Catch DB constraint violation (if Step 1 missed a race condition)
+            raise ValidationError("Transaction rejected: Balance cannot be negative.") from None
+
+        # Refresh customer object so Python knows the new integer value
+        # (F expression turns the field into an expression node until refresh)
+        customer.refresh_from_db()
+
+        # Cache invalidation for balance is NO LONGER NEEDED (it's in the DB now)
+
         return new_transaction
 
     def process_yearly_expiration(self, customer, target_year: int) -> int:
         """
-        Expires points earned in `target_year` based on N+1 Strategy (Calendar Year).
-
-        Logic (FIFO):
-        We calculate if the user has enough 'old' points that haven't been spent yet.
-        Formula: (Total Earned in Target Year) - (Total Lifetime Spent).
-
-        Args:
-            customer: The customer to check.
-            target_year: The year to audit (e.g., 2023).
-
-        Returns:
-            int: The amount of points expired (positive integer).
+        Expires points earned in `target_year` based on N+1 Strategy.
         """
 
         cutoff_date = datetime(target_year, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
 
-        # Calculate Total Earned Points up to the end of the target year.
-        # We include all previous years to be safe, assuming previous years were handled
-        # by prior runs. If this is the first run, it effectively cleans up everything old.
         earned_aggregate = (
             Transaction.objects.filter(
                 customer=customer, transaction_type=Transaction.EARN, created_at__lte=cutoff_date
@@ -91,9 +84,6 @@ class LoyaltyService:
             or 0
         )
 
-        # Calculate Total Spent/Expired Points (Lifetime).
-        # We look at all spending ever occurred (even after the target year),
-        # because customers always spend their "oldest" points first (FIFO).
         used_aggregate = (
             Transaction.objects.filter(
                 customer=customer, transaction_type__in=[Transaction.SPEND, Transaction.EXPIRATION]
@@ -101,16 +91,10 @@ class LoyaltyService:
             or 0
         )
 
-        # Convert negative spending to positive number for calculation
         total_used = abs(used_aggregate)
-
-        # Calculate Remainder
-        # Example: Earned 1000 in 2023. Spent 200 in 2024.
-        # Points to expire = 1000 - 200 = 800.
         points_to_expire = earned_aggregate - total_used
 
         if points_to_expire > 0:
-            # Create a negative transaction with specific type EXPIRATION
             self.process_transaction(
                 customer=customer,
                 amount=-points_to_expire,
@@ -170,7 +154,6 @@ def calculate_points(amount, customer):
         # RULE 3: Happy Hours (Time Window)
         if "start_time" in rules and "end_time" in rules:
             try:
-                # FIX: 'datetime' here refers to the imported class, which has strptime method
                 start = datetime.strptime(rules["start_time"], "%H:%M").time()
                 end = datetime.strptime(rules["end_time"], "%H:%M").time()
 

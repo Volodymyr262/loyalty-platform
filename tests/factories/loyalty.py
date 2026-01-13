@@ -3,6 +3,7 @@ Factories for the loyalty application
 """
 
 import factory
+from django.db.models import F
 from factory import fuzzy
 from factory.django import DjangoModelFactory
 
@@ -55,8 +56,9 @@ class CustomerFactory(DjangoModelFactory):
 
     # Generating unique id for every customer
     external_id = factory.Sequence(lambda n: f"client_{n}")
-
     organization = factory.SubFactory(OrganizationFactory)
+    email = factory.Sequence(lambda n: f"user{n}@example.com")
+    current_balance = 0
 
 
 class RewardFactory(DjangoModelFactory):
@@ -83,6 +85,7 @@ class TransactionFactory(factory.django.DjangoModelFactory):
 
     class Meta:
         model = Transaction
+        skip_postgeneration_save = True
 
     # Creates a dependent Customer instance if not provided
     customer = factory.SubFactory(CustomerFactory)
@@ -94,3 +97,15 @@ class TransactionFactory(factory.django.DjangoModelFactory):
     amount = 100.00
     transaction_type = Transaction.EARN
     description = factory.Faker("sentence")
+
+    @factory.post_generation
+    def update_customer_balance(obj, create, extracted, **kwargs):
+        """
+        Automatically update the customer's cached balance
+        whenever a transaction is created via Factory.
+        """
+        if not create:
+            return
+
+        Customer.objects.filter(id=obj.customer.id).update(current_balance=F("current_balance") + obj.amount)
+        obj.customer.refresh_from_db()

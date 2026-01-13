@@ -3,12 +3,12 @@ Unit tests for the Customer model.
 """
 
 import pytest
-from django.core.cache import cache
 from django.db import IntegrityError
 
 from core.context import set_current_organization_id
 from core.models import TenantAwareModel
-from loyalty.models import Customer
+from loyalty.models import Customer, Transaction
+from tests.factories.loyalty import CustomerFactory, TransactionFactory
 from tests.factories.users import OrganizationFactory
 
 
@@ -54,7 +54,6 @@ class TestCustomerModel:
     def test_external_id_allowed_in_different_tenants(self):
         """
         Verify that the SAME external_id can exist in DIFFERENT organizations.
-        (Shop A has customer '1', Shop B has customer '1').
         """
         org_a = OrganizationFactory()
         org_b = OrganizationFactory()
@@ -68,26 +67,41 @@ class TestCustomerModel:
         assert customer_b.pk is not None
         assert customer_b.organization == org_b
 
-    def test_get_balance_calculates_sum_of_transactions(self):
+    def test_get_balance_returns_stored_field(self):
         """
-        Verify that get_balance() returns the correct sum of all transactions.
+        FIXED: Verify that get_balance() returns the stored 'current_balance' field.
+        We use TransactionFactory which has the 'magic' hook to update balance.
         """
-        from loyalty.models import Transaction
+        customer = CustomerFactory(current_balance=0)
 
+        TransactionFactory(customer=customer, amount=100, transaction_type="earn")
+        TransactionFactory(customer=customer, amount=-30, transaction_type="spend")
+        TransactionFactory(customer=customer, amount=10, transaction_type="earn")
+
+        customer.refresh_from_db()
+
+        assert customer.get_balance() == 80
+        assert customer.current_balance == 80
+
+    def test_calculate_real_balance_audit(self):
+        """
+        NEW: Verify that the backup method 'calculate_real_balance' still works correctly
+        by iterating over transactions sum (Audit/Reconciliation logic).
+        """
         org = OrganizationFactory()
         set_current_organization_id(org.id)
 
-        # Create a customer
-        customer = Customer.objects.create(external_id="balance_test_user")
+        customer = Customer.objects.create(external_id="audit_test_user")
 
-        #  Check initial balance (should be 0)
-        assert customer.get_balance() == 0
-
-        # 3. Add transactions (+100, -30, +10)
+        # Create RAW transactions (bypassing Factory/Service logic).
+        # This simulates a "broken" state where balance wasn't updated.
         Transaction.objects.create(customer=customer, amount=100, transaction_type="earn", organization=org)
         Transaction.objects.create(customer=customer, amount=-30, transaction_type="spend", organization=org)
         Transaction.objects.create(customer=customer, amount=10, transaction_type="earn", organization=org)
 
-        cache.clear()
-        # Verify calculated balance (100 - 30 + 10 = 80)
-        assert customer.get_balance() == 80
+        # The field 'current_balance' is still 0 because we used raw create
+        customer.refresh_from_db()
+        assert customer.get_balance() == 0
+
+        # BUT the audit method should find the real money
+        assert customer.calculate_real_balance() == 80

@@ -2,9 +2,8 @@
 Models for the Loyalty application..
 """
 
-from django.core.cache import cache
 from django.db import models
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from core.models import TenantAwareModel
 
@@ -58,39 +57,34 @@ class Reward(TenantAwareModel):
 class Customer(TenantAwareModel):
     """
     Represents a client of a specific Tenant.
-    NOT a system user.
     """
 
-    # External ID from the client's system
     external_id = models.CharField(max_length=255, blank=True)
     email = models.EmailField(blank=True, null=True)
-    # Date when the customer joined the loyalty program
     joined_at = models.DateTimeField(auto_now_add=True)
 
+    current_balance = models.IntegerField(default=0)
+
     class Meta:
-        # Ensure external_id is unique within a specific organization.
-        # Two different tenants can have a customer with ID "123", but one tenant cannot have duplicates.
         unique_together = [("organization", "external_id")]
+
+        constraints = [models.CheckConstraint(check=Q(current_balance__gte=0), name="prevent_negative_balance")]
 
     def __str__(self):
         return f"{self.external_id} ({self.organization.name})"
 
     def get_balance(self):
         """
-        Calculates the current balance by summing up all related transactions.
-        Returns 0 if no transactions exist.
+        O(1) Operation. Returns the stored field value.
         """
-        cache_key = f"customer_balance:{self.id}"
-        balance = cache.get(cache_key)
+        return self.current_balance
 
-        if balance is not None:
-            return balance
-
-        balance = self.transactions.aggregate(total=Sum("amount"))["total"] or 0
-
-        cache.set(cache_key, balance, timeout=60 * 60 * 24)
-
-        return balance or 0
+    def calculate_real_balance(self):
+        """
+        Audit method: calculates balance from transaction history sum.
+        Use this to check data consistency.
+        """
+        return self.transactions.aggregate(total=Sum("amount"))["total"] or 0
 
 
 class Transaction(TenantAwareModel):
