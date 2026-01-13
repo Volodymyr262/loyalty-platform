@@ -50,7 +50,7 @@ class TestYearlyExpirationTask:
         Expected: Logs error, continues to next customer.
         """
         c1 = CustomerFactory()
-        c2 = CustomerFactory(organization=c1.organization)
+        _ = CustomerFactory(organization=c1.organization)
         org_id = c1.organization.id
 
         with patch("loyalty.tasks.LoyaltyService.process_yearly_expiration") as mock_service:
@@ -73,8 +73,8 @@ class TestYearlyExpirationTask:
         Scenario: The DISPATCHER runs.
         Expected: It finds active organizations and calls .delay() for the worker.
         """
-        c1 = CustomerFactory()  # Org 1 created
-        c2 = CustomerFactory()  # Org 2 created (different org usually)
+        _ = CustomerFactory()
+        _ = CustomerFactory()
 
         result = process_yearly_points_expiration()
 
