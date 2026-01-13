@@ -34,6 +34,7 @@ omit = [
     "config/asgi.py",
     "*/apps.py",
     "*/__init__.py",
+    "generate_data.py"
 ]
 
 [tool.coverage.report]

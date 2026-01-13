@@ -3,13 +3,14 @@ Service layer for Loyalty business logic.
 Handles point calculations, validations, and transaction processing.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone as django_timezone
 
 from loyalty.models import Campaign, Customer, Transaction
@@ -39,19 +40,19 @@ class LoyaltyService:
         """
         _ = Customer.objects.select_for_update().get(id=customer.id)
 
-        # 1. Determine Transaction Type
+        # Determine Transaction Type
         if transaction_type:
             tx_type = transaction_type
         else:
             tx_type = Transaction.SPEND if amount < 0 else Transaction.EARN
 
-        # 2. Validation for spending
+        # Validation for spending
         if amount < 0:
             current_balance = customer.get_balance()
             if current_balance + amount < 0:
                 raise ValidationError(f"Insufficient funds. Balance: {current_balance}, Required: {abs(amount)}")
 
-        # 3. Create Transaction
+        # Create Transaction
         new_transaction = Transaction.objects.create(
             customer=customer,
             amount=amount,
@@ -78,10 +79,9 @@ class LoyaltyService:
             int: The amount of points expired (positive integer).
         """
 
-        # Define the cutoff date: The very last second of the target year.
         cutoff_date = datetime(target_year, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
 
-        # 1. Calculate Total Earned Points up to the end of the target year.
+        # Calculate Total Earned Points up to the end of the target year.
         # We include all previous years to be safe, assuming previous years were handled
         # by prior runs. If this is the first run, it effectively cleans up everything old.
         earned_aggregate = (
@@ -91,7 +91,7 @@ class LoyaltyService:
             or 0
         )
 
-        # 2. Calculate Total Spent/Expired Points (Lifetime).
+        # Calculate Total Spent/Expired Points (Lifetime).
         # We look at all spending ever occurred (even after the target year),
         # because customers always spend their "oldest" points first (FIFO).
         used_aggregate = (
@@ -104,7 +104,7 @@ class LoyaltyService:
         # Convert negative spending to positive number for calculation
         total_used = abs(used_aggregate)
 
-        # 3. Calculate Remainder
+        # Calculate Remainder
         # Example: Earned 1000 in 2023. Spent 200 in 2024.
         # Points to expire = 1000 - 200 = 800.
         points_to_expire = earned_aggregate - total_used
@@ -195,3 +195,61 @@ def calculate_points(amount, customer):
             best_points = calculated_points
 
     return best_points
+
+
+class DashboardAnalyticsService:
+    """
+    Encapsulates logic for calculating Dashboard metrics.
+    Decouples data extraction from API presentation.
+    """
+
+    @staticmethod
+    def get_kpi(queryset):
+        """
+        Calculates high-level KPIs: Customers, Liability, Redemption Rate.
+        """
+        stats = queryset.aggregate(
+            total_customers=Count("customer", distinct=True),
+            total_issued=Coalesce(Sum("amount", filter=Q(transaction_type="earn")), 0),
+            total_redeemed=Coalesce(Sum("amount", filter=Q(transaction_type="spend")), 0),
+            current_liability=Coalesce(Sum("amount"), 0),
+        )
+
+        # Business Logic: Calculate Rate
+        issued = stats["total_issued"]
+        redeemed = abs(stats["total_redeemed"])
+
+        redemption_rate = 0.0
+        if issued > 0:
+            redemption_rate = round((redeemed / issued) * 100, 1)
+
+        return {
+            "total_customers": stats["total_customers"],
+            "current_liability": stats["current_liability"],
+            "redemption_rate": redemption_rate,
+        }
+
+    @staticmethod
+    def get_timeline(queryset, days=30):
+        """
+        Generates daily stats for charts (Last N days).
+        """
+        # FIX: Replaced timezone.now() with django_timezone.now()
+        start_date = django_timezone.now() - timedelta(days=days)
+
+        timeline_qs = (
+            queryset.filter(created_at__gte=start_date)
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(
+                issued=Coalesce(Sum("amount", filter=Q(transaction_type="earn")), 0),
+                redeemed=Coalesce(Sum("amount", filter=Q(transaction_type="spend")), 0),
+            )
+            .order_by("date")
+        )
+
+        # Formatting data for frontend
+        return [
+            {"date": entry["date"], "issued": entry["issued"], "redeemed": abs(entry["redeemed"])}
+            for entry in timeline_qs
+        ]

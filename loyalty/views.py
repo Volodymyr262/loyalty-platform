@@ -2,8 +2,11 @@
 API Views for the Loyalty application.
 """
 
+from django.core.cache import cache
 from rest_framework import filters, mixins, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from loyalty.models import Campaign, Customer, Reward, Transaction
 from loyalty.serializers import (
@@ -14,6 +17,7 @@ from loyalty.serializers import (
     RewardSerializer,
     TransactionReadSerializer,
 )
+from loyalty.services import DashboardAnalyticsService
 from users.authentication import ApiKeyAuthentication
 
 
@@ -105,3 +109,36 @@ class CustomerViewSet(viewsets.ReadOnlyModelViewSet):
         Return customers belonging ONLY to the current tenant.
         """
         return Customer.objects.all()
+
+
+class DashboardStatsView(APIView):
+    """
+    GET /api/loyalty/stats/
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Construct a unique cache key for this tenant
+        # Example key: "dashboard_stats:f10e1213-2df4..."
+        org_id = request.user.organization_id
+        cache_key = f"dashboard_stats:{org_id}"
+
+        # Try to get data from Redis
+        cached_data = cache.get(cache_key)
+
+        if cached_data:
+            # HIT! Return data immediately without touching DB
+            return Response(cached_data)
+
+        # MISS! Calculate data using DB
+        queryset = Transaction.objects.filter()
+
+        kpi_data = DashboardAnalyticsService.get_kpi(queryset)
+        timeline_data = DashboardAnalyticsService.get_timeline(queryset)
+
+        response_data = {"kpi": kpi_data, "timeline": timeline_data}
+
+        cache.set(cache_key, response_data, timeout=60 * 60)
+
+        return Response(response_data)

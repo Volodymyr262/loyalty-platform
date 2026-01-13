@@ -86,10 +86,8 @@ class Customer(TenantAwareModel):
         if balance is not None:
             return balance
 
-        # 3. Якщо в кеші немає — рахуємо через БД (важка операція)
         balance = self.transactions.aggregate(total=Sum("amount"))["total"] or 0
 
-        # 4. Зберігаємо в Redis на довгий час (наприклад, 24 години)
         cache.set(cache_key, balance, timeout=60 * 60 * 24)
 
         return balance or 0
@@ -124,3 +122,13 @@ class Transaction(TenantAwareModel):
 
     def __str__(self):
         return f"{self.customer} - {self.amount} ({self.get_transaction_type_display()})"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["customer", "-created_at"]),
+            models.Index(fields=["transaction_type"]),
+        ]
+
+        # Order by newest first by default
+        ordering = ["-created_at"]
