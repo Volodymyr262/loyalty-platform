@@ -139,29 +139,23 @@ class TestDashboardStatsAPI:
         2. Second request -> Hits Redis (Returns cached result).
         3. DB Query count should be significantly lower on the second call.
         """
-        # Create data to make sure DB actually has work to do
         c = CustomerFactory(organization=self.org)
         TransactionFactory(customer=c, amount=100)
 
-        # Cold Cache Request
         with CaptureQueriesContext(connection) as ctx_cold:
             response_1 = self.client.get(self.url, **self.headers)
 
         assert response_1.status_code == 200
         queries_cold = len(ctx_cold.captured_queries)
 
-        # Warm Cache Request
         with CaptureQueriesContext(connection) as ctx_warm:
             response_2 = self.client.get(self.url, **self.headers)
 
         assert response_2.status_code == 200
         queries_warm = len(ctx_warm.captured_queries)
 
-        # Assertions
         assert response_1.data == response_2.data
-        # We expect FEWER queries.
-        # Note: We don't assert 0 queries because Auth Middleware usually hits DB to check User/ApiKey.
-        # But the heavy aggregation queries on 'loyalty_transaction' should be gone.
+
         assert (
             queries_warm < queries_cold
         ), f"Expected cache to reduce queries. Cold: {queries_cold}, Warm: {queries_warm}"
@@ -176,18 +170,13 @@ class TestDashboardStatsAPI:
         customer = CustomerFactory(organization=self.org)
         TransactionFactory(customer=customer, amount=100, transaction_type="earn")
 
-        # Initial Request (Liablity: 100)
         resp_1 = self.client.get(self.url, **self.headers)
         assert resp_1.data["kpi"]["current_liability"] == 100.0
 
-        # Trigger Signal (New Transaction)
-        # This acts as a "Write" operation that should invalidate the read cache
         TransactionFactory(customer=customer, amount=50, transaction_type="earn")
 
-        # Request again. If cache wasn't cleared, we would still see 100.
         resp_2 = self.client.get(self.url, **self.headers)
 
-        # Assert that we see FRESH data immediately
         assert resp_2.data["kpi"]["current_liability"] == 150.0
 
     def test_cache_tenant_isolation(self):
