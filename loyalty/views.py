@@ -3,6 +3,7 @@ API Views for the Loyalty application.
 """
 
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, mixins, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -21,25 +22,35 @@ from loyalty.services import DashboardAnalyticsService
 from users.authentication import ApiKeyAuthentication
 
 
+@extend_schema(tags=["Loyalty Management"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="List Campaigns", description="Get all active and inactive campaigns for the organization"
+    ),
+    create=extend_schema(summary="Create Campaign", description="Define new earning rules"),
+    retrieve=extend_schema(summary="Get Campaign Details"),
+    update=extend_schema(summary="Update Campaign"),
+    destroy=extend_schema(summary="Delete Campaign"),
+)
 class CampaignViewSet(viewsets.ModelViewSet):
     """
     API endpoint for Campaigns.
     """
 
     permission_classes = [IsAuthenticated]
-
     serializer_class = CampaignSerializer
 
     def get_queryset(self):
-        """
-        Return the list of campaigns for the CURRENT tenant only.
-
-        Because Campaign inherits from TenantAwareModel,
-        Campaign.objects.all() is AUTOMATICALLY filtered by the current organization
-        """
         return Campaign.objects.all()
 
 
+@extend_schema(tags=["Transactions"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="Transaction History", description="View global transaction ledger for the organization"
+    ),
+    retrieve=extend_schema(summary="Transaction Details"),
+)
 class TransactionHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """
     GET /api/loyalty/transactions/
@@ -53,6 +64,7 @@ class TransactionHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         return Transaction.objects.all().order_by("-created_at")
 
 
+@extend_schema(tags=["Points Management"])
 class AccrualViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     """
     POST /api/loyalty/accruals/
@@ -63,7 +75,14 @@ class AccrualViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     permission_classes = [AllowAny]
     serializer_class = AccrualSerializer
 
+    @extend_schema(
+        summary="Accrue Points (Earn)", description="Add points to customer balance based on transaction amount."
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
+
+@extend_schema(tags=["Points Management"])
 class RedemptionViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     """
     POST /api/loyalty/redemption/
@@ -74,7 +93,21 @@ class RedemptionViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     permission_classes = [AllowAny]
     serializer_class = RedemptionSerializer
 
+    @extend_schema(
+        summary="Redeem Points (Spend)", description="Deduct points from customer balance in exchange for a reward."
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
+
+@extend_schema(tags=["Loyalty Management"])
+@extend_schema_view(
+    list=extend_schema(summary="List Rewards", description="Catalog of items available for redemption"),
+    create=extend_schema(summary="Create Reward"),
+    retrieve=extend_schema(summary="Reward Details"),
+    update=extend_schema(summary="Update Reward"),
+    destroy=extend_schema(summary="Delete Reward"),
+)
 class RewardViewSet(viewsets.ModelViewSet):
     """
     API endpoint for managing Rewards (the catalog).
@@ -84,12 +117,14 @@ class RewardViewSet(viewsets.ModelViewSet):
     serializer_class = RewardSerializer
 
     def get_queryset(self):
-        """
-        Return rewards for the CURRENT tenant only.
-        """
         return Reward.objects.all()
 
 
+@extend_schema(tags=["Customers"])
+@extend_schema_view(
+    list=extend_schema(summary="List Customers", description="Searchable list of customers and their balances"),
+    retrieve=extend_schema(summary="Customer Profile"),
+)
 class CustomerViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for viewing Customers and their current balance.
@@ -105,12 +140,10 @@ class CustomerViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ["external_id", "email"]
 
     def get_queryset(self):
-        """
-        Return customers belonging ONLY to the current tenant.
-        """
         return Customer.objects.all()
 
 
+@extend_schema(tags=["Analytics"])
 class DashboardStatsView(APIView):
     """
     GET /api/loyalty/stats/
@@ -118,9 +151,12 @@ class DashboardStatsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Dashboard KPI",
+        description="Returns aggregated metrics (Total Liability, Redemption Rate) and timeline data for charts.",
+    )
     def get(self, request):
         # Construct a unique cache key for this tenant
-        # Example key: "dashboard_stats:f10e1213-2df4..."
         org_id = request.user.organization_id
         cache_key = f"dashboard_stats:{org_id}"
 
@@ -128,7 +164,6 @@ class DashboardStatsView(APIView):
         cached_data = cache.get(cache_key)
 
         if cached_data:
-            # HIT! Return data immediately without touching DB
             return Response(cached_data)
 
         # MISS! Calculate data using DB
@@ -139,6 +174,7 @@ class DashboardStatsView(APIView):
 
         response_data = {"kpi": kpi_data, "timeline": timeline_data}
 
+        # Cache for 1 hour (invalidated via signals on new transaction)
         cache.set(cache_key, response_data, timeout=60 * 60)
 
         return Response(response_data)

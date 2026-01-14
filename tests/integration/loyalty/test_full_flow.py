@@ -3,7 +3,7 @@ Integration tests for the full Loyalty lifecycle using Factories.
 Includes checks for:
 1. Multi-tenancy isolation.
 2. End-to-end Accrual -> Redemption flow.
-3. Complex Expiration logic (verifying the fix).
+3. Complex Expiration logic
 """
 
 from datetime import datetime
