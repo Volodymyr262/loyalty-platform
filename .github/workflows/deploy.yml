@@ -1,0 +1,33 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - feature/deployment-aws
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd loyalty-platform
+        
+          git pull origin feature/deployment-aws
+        
+          docker compose -f docker-compose.prod.yml up -d --build
+          
+          docker compose -f docker-compose.prod.yml exec -T web python manage.py migrate
+          
+          docker compose -f docker-compose.prod.yml exec -T web python manage.py collectstatic --noinput
+          
+          docker compose -f docker-compose.prod.yml restart nginx
