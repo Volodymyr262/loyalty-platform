@@ -3,7 +3,7 @@ Integration tests for the full Loyalty lifecycle using Factories.
 Includes checks for:
 1. Multi-tenancy isolation.
 2. End-to-end Accrual -> Redemption flow.
-3. Complex Expiration logic (verifying the fix).
+3. Complex Expiration logic
 """
 
 from datetime import datetime
@@ -54,21 +54,16 @@ class TestLoyaltySystemIntegration:
         2. Tenant B requests customer list.
         3. Tenant B should see 0 customers (Isolation).
         """
-        # 1. Create Customer for Tenant A using Factory
         CustomerFactory(organization=tenant_a, external_id="client_A_001")
 
-        # 2. Authenticate as Tenant B
         url = reverse("customers-list")
         api_client.credentials(HTTP_X_API_KEY=api_key_b)
 
-        # 3. Request data
         response = api_client.get(url)
 
-        # 4. Assertions
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 0
 
-        # 5. Authenticate as Tenant A (Control check)
         api_client.credentials(HTTP_X_API_KEY=api_key_a)
         response_a = api_client.get(url)
         assert len(response_a.data) == 1
@@ -86,19 +81,14 @@ class TestLoyaltySystemIntegration:
         api_client.credentials(HTTP_X_API_KEY=api_key_a)
         customer_id = "user_flow_test"
 
-        # --- Step 1: Accrual (Earn) ---
         accrual_url = reverse("accruals-list")
         payload = {"external_id": customer_id, "amount": 100, "description": "Welcome Bonus"}
 
         response = api_client.post(accrual_url, payload, format="json")
         assert response.status_code == status.HTTP_201_CREATED
 
-        # Verify Customer Created in DB
         customer = Customer.objects.get(external_id=customer_id, organization=tenant_a)
         assert customer.get_balance() == 100
-
-        # --- Step 2: Redemption (Spend) ---
-        # FIX: We need a Reward object because the API requires 'reward_id'
         from tests.factories.loyalty import RewardFactory
 
         reward = RewardFactory(organization=tenant_a, point_cost=40, name="Test Coffee")
@@ -106,26 +96,19 @@ class TestLoyaltySystemIntegration:
         redemption_url = reverse("redemption-list")
 
         redeem_payload = {
-            # FIX 1: API expects 'customer_external_id', NOT internal ID
             "customer_external_id": customer_id,
-            # FIX 2: API expects 'reward_id', NOT raw amount
             "reward_id": reward.id,
         }
 
         response = api_client.post(redemption_url, redeem_payload, format="json")
 
-        # Debug output in case something else is wrong
         if response.status_code != 201:
             print(f"\nDEBUG ERROR RESPONSE: {response.data}")
 
         assert response.status_code == status.HTTP_201_CREATED
 
-        # --- Step 3: Final Balance Check ---
-        from django.core.cache import cache
+        customer.refresh_from_db()
 
-        cache.delete(f"customer_balance:{customer.id}")
-
-        # 100 (earned) - 40 (reward cost) = 60
         assert customer.get_balance() == 60
 
     def test_expiration_logic_complex_scenario(self, tenant_a):
@@ -151,10 +134,6 @@ class TestLoyaltySystemIntegration:
         date_2023 = datetime(2023, 6, 1, 12, 0, 0, tzinfo=tz)
         date_2024 = datetime(2024, 6, 1, 12, 0, 0, tzinfo=tz)
 
-        # 1. Create Transactions using Factory
-        # IMPORTANT: We must update created_at manually because auto_now_add=True
-        # ignores arguments passed to the constructor/factory.
-
         t1 = TransactionFactory(customer=customer, amount=100, transaction_type=Transaction.EARN)
         t1.created_at = date_2022
         t1.save(update_fields=["created_at"])
@@ -167,10 +146,9 @@ class TestLoyaltySystemIntegration:
         t3.created_at = date_2024
         t3.save(update_fields=["created_at"])
 
-        # Sanity Check: Balance should be 150 (200 earned - 50 spent)
-        from django.core.cache import cache
+        customer.refresh_from_db()
 
-        cache.delete(f"customer_balance:{customer.id}")
+        # Sanity Check: Balance should be 150 (200 earned - 50 spent)
         assert customer.get_balance() == 150
 
         # 2. Run Expiration for 2022
@@ -181,7 +159,8 @@ class TestLoyaltySystemIntegration:
         assert expired_amount == 50
 
         # Verify balance after expiration (150 - 50 = 100)
-        cache.delete(f"customer_balance:{customer.id}")
+        # Refresh again because service did an update
+        customer.refresh_from_db()
         assert customer.get_balance() == 100
 
         # 3. Future Check for 2023 (Theoretical)
