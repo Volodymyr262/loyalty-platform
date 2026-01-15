@@ -15,13 +15,18 @@ jobs:
 
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.0
+      env:
+        PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        envs: PROD_ENV_FILE
         script: |
           cd loyalty-platform
-        
+          
+          echo "$PROD_ENV_FILE" > .env.prod
+          
           git pull origin feature/deployment-aws
         
           docker compose -f docker-compose.prod.yml up -d --build
