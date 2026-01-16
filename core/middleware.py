@@ -7,7 +7,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from core.context import reset_current_organization_id, set_current_organization_id
 from users.models import OrganizationApiKey
-
+import sys
 
 class TenantContextMiddleware:
     """
@@ -33,6 +33,10 @@ class TenantContextMiddleware:
 
         organization = None
 
+        if path.startswith("/api/loyalty/"):
+            print(f"DEBUG: Checking path {path}", file=sys.stderr)
+            auth_header = request.headers.get('Authorization')
+            print(f"DEBUG: Authorization Header found: {auth_header}", file=sys.stderr)
         # Check for API Key (Machine-to-Machine)
         api_key = (
             request.headers.get("X-API-KEY")
