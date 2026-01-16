@@ -61,12 +61,17 @@ class TenantContextMiddleware:
 
             if not is_authenticated:
                 try:
+                    print("DEBUG: User not authenticated, trying manual JWT...", file=sys.stderr)
                     auth_result = JWTAuthentication().authenticate(request)
                     if auth_result:
+                        print(f"DEBUG: JWT Success! User: {auth_result[0]}", file=sys.stderr)
                         user_obj, _ = auth_result
                         request.user = user_obj
                         user = user_obj
-                except Exception:
+                    else:
+                        print("DEBUG: JWT returned None", file=sys.stderr)
+                except Exception as e:
+                    print(f"DEBUG: JWT Error: {str(e)}", file=sys.stderr)
                     pass
 
             user = getattr(request, "user", None)
