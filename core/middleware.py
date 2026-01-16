@@ -21,9 +21,11 @@ class TenantContextMiddleware:
         reset_current_organization_id()
 
         path = request.path
+        # Skip authentication for admin, static files, auth endpoints, and docs
         if (
             path.startswith("/admin/")
             or path.startswith("/static/")
+            or path.startswith("/media/")
             or path.startswith("/api/auth/")
             or "/api/docs/" in path
             or "/api/schema/" in path
@@ -33,7 +35,7 @@ class TenantContextMiddleware:
 
         organization = None
 
-        # Check for API Key (Machine-to-Machine)
+        # 1. Check for API Key (Machine-to-Machine)
         api_key = (
             request.headers.get("X-API-KEY")
             or request.headers.get("X-Tenant-API-Key")
@@ -42,7 +44,8 @@ class TenantContextMiddleware:
 
         if api_key:
             try:
-                key_obj = OrganizationApiKey.objects.get(key=api_key, is_active=True)
+                # Optimized query to fetch organization along with the key
+                key_obj = OrganizationApiKey.objects.select_related("organization").get(key=api_key, is_active=True)
                 organization = key_obj.organization
             except OrganizationApiKey.DoesNotExist:
                 return JsonResponse(
@@ -50,11 +53,12 @@ class TenantContextMiddleware:
                     status=403,
                 )
 
-        # Check for User Authentication (Human-to-Machine)
+        # 2. Check for User Authentication (Human-to-Machine)
         else:
             user = getattr(request, "user", None)
             is_authenticated = user and user.is_authenticated
 
+            # If user is not authenticated by Django yet, try manual JWT auth
             if not is_authenticated:
                 try:
                     auth_result = JWTAuthentication().authenticate(request)
@@ -63,6 +67,8 @@ class TenantContextMiddleware:
                         request.user = user_obj
                         user = user_obj
                 except Exception:
+                    # Ignore auth errors here; allow anonymous access if view permits,
+                    # or block later if organization context is required.
                     pass
 
             user = getattr(request, "user", None)
@@ -70,7 +76,8 @@ class TenantContextMiddleware:
             if user and user.is_authenticated:
                 organization = user.organization
 
-        # Final Context Setup
+        # 3. Final Context Setup & Blocking
+        # Block access to loyalty API if no organization context is found
         if path.startswith("/api/loyalty/") and not organization:
             return JsonResponse(
                 {
