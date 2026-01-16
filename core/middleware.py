@@ -9,6 +9,9 @@ from core.context import reset_current_organization_id, set_current_organization
 from users.models import OrganizationApiKey
 import sys
 
+def debug_print(msg):
+    print(f"[MIDDLEWARE-DEBUG] {msg}", file=sys.stderr, flush=True)
+
 class TenantContextMiddleware:
     """
     Acts as a "Gatekeeper". It determines the current Organization context.
@@ -33,10 +36,8 @@ class TenantContextMiddleware:
 
         organization = None
 
-        if path.startswith("/api/loyalty/"):
-            print(f"DEBUG: Checking path {path}", file=sys.stderr)
-            auth_header = request.headers.get('Authorization')
-            print(f"DEBUG: Authorization Header found: {auth_header}", file=sys.stderr)
+        debug_print(f"Processing request: {path}")
+
         # Check for API Key (Machine-to-Machine)
         api_key = (
             request.headers.get("X-API-KEY")
@@ -45,10 +46,13 @@ class TenantContextMiddleware:
         )
 
         if api_key:
+            debug_print("Found X-API-KEY")
             try:
                 key_obj = OrganizationApiKey.objects.get(key=api_key, is_active=True)
                 organization = key_obj.organization
+                debug_print(f"API Key valid. Org: {organization.name}")
             except OrganizationApiKey.DoesNotExist:
+                debug_print("API Key Invalid")
                 return JsonResponse(
                     {"detail": "Invalid or inactive Tenant API Key."},
                     status=403,
@@ -60,27 +64,40 @@ class TenantContextMiddleware:
             is_authenticated = user and user.is_authenticated
 
             if not is_authenticated:
+                # --- DEBUG: Show raw header ---
+                auth_header = request.headers.get('Authorization')
+                debug_print(f"User not authenticated. Authorization header: {auth_header}")
+
                 try:
-                    print("DEBUG: User not authenticated, trying manual JWT...", file=sys.stderr)
+                    debug_print("Attempting manual JWT auth...")
                     auth_result = JWTAuthentication().authenticate(request)
                     if auth_result:
-                        print(f"DEBUG: JWT Success! User: {auth_result[0]}", file=sys.stderr)
                         user_obj, _ = auth_result
+                        # --- DEBUG: Show who was found ---
+                        debug_print(f"JWT Success! User ID: {user_obj.id}, Email: {user_obj.email}")
+
                         request.user = user_obj
                         user = user_obj
                     else:
-                        print("DEBUG: JWT returned None", file=sys.stderr)
+                        debug_print("JWT returned None (Header format might be wrong or token invalid)")
                 except Exception as e:
-                    print(f"DEBUG: JWT Error: {str(e)}", file=sys.stderr)
+                    debug_print(f"JWT Error Exception: {str(e)}")
                     pass
 
             user = getattr(request, "user", None)
 
             if user and user.is_authenticated:
+                # --- DEBUG: Check Organization field ---
+                org_val = getattr(user, 'organization', 'MISSING FIELD')
+                debug_print(f"User is authenticated. Organization field value: {org_val}")
                 organization = user.organization
+            else:
+                 debug_print("User remains Anonymous after checks.")
 
         # Final Context Setup
         if path.startswith("/api/loyalty/") and not organization:
+            # --- DEBUG: Final Blocking Reason ---
+            debug_print(f"BLOCKING REQUEST. Path: {path}. Reason: Organization is None.")
             return JsonResponse(
                 {
                     "detail": "Organization context required. "
@@ -92,6 +109,7 @@ class TenantContextMiddleware:
         if organization:
             set_current_organization_id(organization.id)
             request.tenant = organization
+            debug_print(f"Context Set. Org ID: {organization.id}")
 
             if hasattr(request, "user"):
                 request.user.organization = organization
