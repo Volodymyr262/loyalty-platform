@@ -7,10 +7,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from core.context import reset_current_organization_id, set_current_organization_id
 from users.models import OrganizationApiKey
-import sys
 
-def debug_print(msg):
-    print(f"[MIDDLEWARE-DEBUG] {msg}", file=sys.stderr, flush=True)
 
 class TenantContextMiddleware:
     """
@@ -24,9 +21,11 @@ class TenantContextMiddleware:
         reset_current_organization_id()
 
         path = request.path
+        # Skip authentication for admin, static files, auth endpoints, and docs
         if (
             path.startswith("/admin/")
             or path.startswith("/static/")
+            or path.startswith("/media/")
             or path.startswith("/api/auth/")
             or "/api/docs/" in path
             or "/api/schema/" in path
@@ -36,9 +35,7 @@ class TenantContextMiddleware:
 
         organization = None
 
-        debug_print(f"Processing request: {path}")
-
-        # Check for API Key (Machine-to-Machine)
+        # 1. Check for API Key (Machine-to-Machine)
         api_key = (
             request.headers.get("X-API-KEY")
             or request.headers.get("X-Tenant-API-Key")
@@ -46,58 +43,42 @@ class TenantContextMiddleware:
         )
 
         if api_key:
-            debug_print("Found X-API-KEY")
             try:
-                key_obj = OrganizationApiKey.objects.get(key=api_key, is_active=True)
+                # Optimized query to fetch organization along with the key
+                key_obj = OrganizationApiKey.objects.select_related("organization").get(key=api_key, is_active=True)
                 organization = key_obj.organization
-                debug_print(f"API Key valid. Org: {organization.name}")
             except OrganizationApiKey.DoesNotExist:
-                debug_print("API Key Invalid")
                 return JsonResponse(
                     {"detail": "Invalid or inactive Tenant API Key."},
                     status=403,
                 )
 
-        # Check for User Authentication (Human-to-Machine)
+        # 2. Check for User Authentication (Human-to-Machine)
         else:
             user = getattr(request, "user", None)
             is_authenticated = user and user.is_authenticated
 
+            # If user is not authenticated by Django yet, try manual JWT auth
             if not is_authenticated:
-                # --- DEBUG: Show raw header ---
-                auth_header = request.headers.get('Authorization')
-                debug_print(f"User not authenticated. Authorization header: {auth_header}")
-
                 try:
-                    debug_print("Attempting manual JWT auth...")
                     auth_result = JWTAuthentication().authenticate(request)
                     if auth_result:
                         user_obj, _ = auth_result
-                        # --- DEBUG: Show who was found ---
-                        debug_print(f"JWT Success! User ID: {user_obj.id}, Email: {user_obj.email}")
-
                         request.user = user_obj
                         user = user_obj
-                    else:
-                        debug_print("JWT returned None (Header format might be wrong or token invalid)")
-                except Exception as e:
-                    debug_print(f"JWT Error Exception: {str(e)}")
+                except Exception:
+                    # Ignore auth errors here; allow anonymous access if view permits,
+                    # or block later if organization context is required.
                     pass
 
             user = getattr(request, "user", None)
 
             if user and user.is_authenticated:
-                # --- DEBUG: Check Organization field ---
-                org_val = getattr(user, 'organization', 'MISSING FIELD')
-                debug_print(f"User is authenticated. Organization field value: {org_val}")
                 organization = user.organization
-            else:
-                 debug_print("User remains Anonymous after checks.")
 
-        # Final Context Setup
+        # 3. Final Context Setup & Blocking
+        # Block access to loyalty API if no organization context is found
         if path.startswith("/api/loyalty/") and not organization:
-            # --- DEBUG: Final Blocking Reason ---
-            debug_print(f"BLOCKING REQUEST. Path: {path}. Reason: Organization is None.")
             return JsonResponse(
                 {
                     "detail": "Organization context required. "
@@ -109,7 +90,6 @@ class TenantContextMiddleware:
         if organization:
             set_current_organization_id(organization.id)
             request.tenant = organization
-            debug_print(f"Context Set. Org ID: {organization.id}")
 
             if hasattr(request, "user"):
                 request.user.organization = organization
