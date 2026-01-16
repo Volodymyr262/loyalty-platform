@@ -25,7 +25,7 @@ INSTALLED_APPS = [
     # Third-party apps
     "rest_framework",
     "drf_spectacular",
-    # Local apps (LaaS modules)
+    # Local apps
     "users",
     "core",
     "loyalty",
