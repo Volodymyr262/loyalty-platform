@@ -99,7 +99,9 @@ jobs:
           
           echo "$PROD_ENV_FILE" > .env.prod
           
-          git pull origin main
+          git fetch origin main
+
+          git reset --hard origin/main
         
           docker compose -f docker-compose.prod.yml up -d --build
           
