@@ -19,7 +19,7 @@
 
 * **High Quality Code:** The project follows strict **TDD (Test Driven Development)** principles, achieving **95% test coverage**.
 * **Multi-Tenancy:** Data isolation per organization via Middleware.
-* **Security:** Hybrid authentication (JWT + API Keys), Rate Limiting.
+* **Security:** Hybrid authentication (JWT + API Keys).
 * **Modern Stack:** Built on the latest stable versions of Django 5 and Python 3.12.
 
 ---
@@ -41,10 +41,9 @@
 
 The system uses a **Service-Oriented Architecture** approach within a monolithic codebase:
 
-1.  **Middleware Layer:** Handles Tenant context resolution (via API Key or User) and Rate Limiting.
-2.  **API Layer:** `drf-spectacular` auto-schema generation, ViewSets with strict serializers.
-3.  **Business Logic:** Encapsulated in Services/Managers to keep Views thin.
-4.  **Async Workers:** Celery + Redis for processing heavy tasks.
+1.  **Middleware Layer:** Handles Tenant context resolution (via API Key or User).
+2.  **Business Logic:** Encapsulated in Services/Managers to keep Views thin.
+3.  **Async Workers:** Celery + Redis for processing heavy tasks.
 
 ---
 
