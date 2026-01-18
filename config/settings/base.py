@@ -131,16 +131,21 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
     "APPEND_COMPONENTS": {
         "securitySchemes": {
-            "TenantApiKey": {
+            "jwtAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            },
+            "ApiKeyAuth": {
                 "type": "apiKey",
                 "in": "header",
-                "name": "HTTP_X_TENANT_API_KEY",
-                "description": "API Key of the Organization (Tenant)",
-            }
+                "name": "X-API-KEY",
+            },
         }
     },
     "SECURITY": [
-        {"TenantApiKey": []},
+        {"jwtAuth": []},
+        {"ApiKeyAuth": []},
     ],
 }
 AUTH_USER_MODEL = "users.User"

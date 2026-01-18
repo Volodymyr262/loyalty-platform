@@ -69,7 +69,7 @@ class CreateTeamMemberView(generics.CreateAPIView):
         return super().post(request, *args, **kwargs)
 
 
-@extend_schema(tags=["Settings"])
+@extend_schema(tags=["API Keys"])
 @extend_schema_view(
     list=extend_schema(summary="List API Keys", description="Get all active API keys (masked)"),
     create=extend_schema(
