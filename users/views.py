@@ -2,13 +2,19 @@
 Authentication Views.
 """
 
-from drf_spectacular.utils import extend_schema
-from rest_framework import generics
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import generics, mixins, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from users.serializers import TeamMemberSerializer, TenantRegistrationSerializer, UserDetailSerializer
+from users.models import OrganizationApiKey
+from users.serializers import (
+    OrganizationApiKeySerializer,
+    TeamMemberSerializer,
+    TenantRegistrationSerializer,
+    UserDetailSerializer,
+)
 
 
 @extend_schema(tags=["auth"])
@@ -61,3 +67,26 @@ class CreateTeamMemberView(generics.CreateAPIView):
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
+
+
+@extend_schema(tags=["API Keys"])
+@extend_schema_view(
+    list=extend_schema(summary="List API Keys", description="Get all active API keys (masked)"),
+    create=extend_schema(
+        summary="Generate API Key", description="Create a new key. WARNING: Full key is shown only once!"
+    ),
+    destroy=extend_schema(summary="Revoke API Key"),
+)
+class OrganizationApiKeyViewSet(
+    mixins.CreateModelMixin, mixins.ListModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet
+):
+    permission_classes = [IsAuthenticated]
+    serializer_class = OrganizationApiKeySerializer
+
+    def get_queryset(self):
+        if getattr(self.request.user, "organization", None):
+            return OrganizationApiKey.objects.filter(organization=self.request.user.organization)
+        return OrganizationApiKey.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)

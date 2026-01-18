@@ -2,12 +2,14 @@
 Serializers for User authentication and profile management.
 """
 
+import secrets
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from users.models import Organization
+from users.models import Organization, OrganizationApiKey
 
 User = get_user_model()
 
@@ -110,3 +112,30 @@ class TeamMemberSerializer(serializers.ModelSerializer):
             last_name=validated_data.get("last_name", ""),
         )
         return user
+
+
+class OrganizationApiKeySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrganizationApiKey
+        fields = ["id", "name", "key", "created_at", "is_active"]
+        read_only_fields = ["id", "key", "created_at", "is_active"]
+
+    def create(self, validated_data):
+        validated_data["key"] = secrets.token_urlsafe(32)
+        return super().create(validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        request = self.context.get("request")
+
+        if request and request.method != "POST":
+            raw_key = data.get("key", "")
+            if len(raw_key) > 4:
+                visible_chars = 4
+                masked_part = "*" * (len(raw_key) - visible_chars)
+                data["key"] = masked_part + raw_key[-visible_chars:]
+            else:
+                data["key"] = "****"
+
+        return data
