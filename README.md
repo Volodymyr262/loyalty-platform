@@ -11,7 +11,8 @@
 
 **Loyalty Platform API** is a production-ready, multi-tenant SaaS solution designed for scalability and security. It enables businesses to create custom loyalty programs, track transactions, and manage rewards with bank-grade isolation between tenants.
 
-**Live Demo:** [https://13.61.251.242.nip.io/api/docs/](https://13.61.251.242.nip.io/api/docs/)
+## **Live Demo:** 
+[https://13.61.251.242.nip.io/api/docs/](https://13.61.251.242.nip.io/api/docs/)
 
 ---
 
