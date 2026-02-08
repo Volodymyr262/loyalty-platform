@@ -18,12 +18,46 @@ class CampaignSerializer(serializers.ModelSerializer):
         model = Campaign
         fields = ["id", "name", "description", "points_value", "reward_type", "rules", "is_active"]
 
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = request.user
+        name = attrs.get("name")
+
+        if name:
+            exists_query = Campaign.objects.filter(organization=user.organization, name=name)
+
+            if self.instance:
+                exists_query = exists_query.exclude(pk=self.instance.pk)
+
+            if exists_query.exists():
+                raise serializers.ValidationError(
+                    {"name": "Campaign with this name already exists in your organization."}
+                )
+
+        return attrs
+
 
 class RewardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reward
         fields = ["id", "name", "description", "point_cost", "is_active"]
         read_only_fields = ["id"]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = request.user
+        name = attrs.get("name")
+
+        if name:
+            exists_query = Reward.objects.filter(organization=user.organization, name=name)
+
+            if self.instance:
+                exists_query = exists_query.exclude(pk=self.instance.pk)
+
+            if exists_query.exists():
+                raise serializers.ValidationError({"name": "Reward with this name already exists."})
+
+        return attrs
 
 
 class TransactionReadSerializer(serializers.ModelSerializer):

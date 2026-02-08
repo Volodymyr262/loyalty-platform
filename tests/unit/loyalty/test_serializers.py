@@ -15,6 +15,7 @@ from loyalty.serializers import (
     CampaignSerializer,
     CustomerSerializer,
     RedemptionSerializer,
+    RewardSerializer,
     TransactionReadSerializer,
 )
 from tests.factories.loyalty import CampaignFactory, CustomerFactory, RewardFactory, TransactionFactory
@@ -41,6 +42,25 @@ class TestCampaignSerializer:
         assert data["rules"] == {"min_amount": 1000}
 
         assert "organization" not in data
+
+    def test_campaign_serializer_validates_unique_name_in_org(self):
+        """
+        Ensure we cannot create a campaign with a duplicate name in the same organization.
+        """
+        user = UserFactory()
+        _ = CampaignFactory(organization=user.organization, name="Summer Sale")
+
+        request = MagicMock()
+        request.user = user
+
+        data = {"name": "Summer Sale", "points_value": 50, "reward_type": "bonus"}
+
+        serializer = CampaignSerializer(data=data, context={"request": request})
+
+        # 4. Assert it is invalid
+        assert not serializer.is_valid()
+        assert "name" in serializer.errors
+        assert "already exists" in str(serializer.errors["name"][0])
 
 
 class TestTransactionSerializers:
@@ -291,3 +311,40 @@ class TestCustomerSerializer:
         assert "id" in data
         assert "balance" in data
         assert float(data["balance"]) == 120.00
+
+
+class TestRewardSerializer:
+    """
+    Test Reward Serializer validation logic.
+    """
+
+    def test_reward_serializer_validates_unique_name(self):
+        user = UserFactory()
+        RewardFactory(organization=user.organization, name="Free Coffee")
+
+        request = MagicMock()
+        request.user = user
+
+        data = {"name": "Free Coffee", "point_cost": 500, "is_active": True}
+
+        serializer = RewardSerializer(data=data, context={"request": request})
+
+        assert not serializer.is_valid()
+        assert "name" in serializer.errors
+
+    def test_reward_serializer_allows_same_name_in_different_org(self):
+        """
+        User A has 'Free Coffee'. User B should also be able to create 'Free Coffee'.
+        """
+        user_a = UserFactory()
+        RewardFactory(organization=user_a.organization, name="Free Coffee")
+
+        user_b = UserFactory()
+        request = MagicMock()
+        request.user = user_b
+
+        data = {"name": "Free Coffee", "point_cost": 500}
+
+        serializer = RewardSerializer(data=data, context={"request": request})
+
+        assert serializer.is_valid(), serializer.errors
