@@ -139,3 +139,13 @@ class OrganizationApiKeySerializer(serializers.ModelSerializer):
                 data["key"] = "****"
 
         return data
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = request.user
+        name = attrs.get("name")
+
+        if OrganizationApiKey.objects.filter(organization=user.organization, name=name).exists():
+            raise serializers.ValidationError({"name": "An API key with this name already exists."})
+
+        return attrs

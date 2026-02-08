@@ -37,6 +37,11 @@ class OrganizationApiKey(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="unique_apikey_name_per_organization")
+        ]
+
     def __str__(self):
         return f"{self.organization.name} - {self.name}"
 

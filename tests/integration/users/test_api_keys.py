@@ -126,3 +126,18 @@ class TestOrganizationApiKeyAPI:
         response = self.client.patch(update_url, data=payload)
 
         assert response.status_code in [status.HTTP_405_METHOD_NOT_ALLOWED, status.HTTP_404_NOT_FOUND]
+
+    def test_cannot_create_duplicate_key_name_in_same_org(self):
+        """
+        POST /api/auth/api-keys/
+        Ensure we cannot create two keys with the same name within the same organization.
+        Should return 400 Bad Request (handled by Serializer validation).
+        """
+        OrganizationApiKeyFactory(organization=self.org, name="Website Key", key="key_1")
+
+        payload = {"name": "Website Key"}
+        response = self.client.post(self.url, data=payload)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "name" in response.data
+        assert "exists" in str(response.data["name"][0])
