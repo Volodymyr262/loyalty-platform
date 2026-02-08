@@ -35,6 +35,11 @@ class Campaign(TenantAwareModel):
 
     is_active = models.BooleanField(default=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="unique_campaign_name_per_organization")
+        ]
+
     def __str__(self):
         return f"{self.name} ({self.get_reward_type_display()})"
 
@@ -49,6 +54,11 @@ class Reward(TenantAwareModel):
     description = models.TextField(blank=True)
     point_cost = models.PositiveIntegerField()
     is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="unique_reward_name_per_organization")
+        ]
 
     def __str__(self):
         return self.name
